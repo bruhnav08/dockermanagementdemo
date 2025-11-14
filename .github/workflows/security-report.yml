@@ -8,21 +8,19 @@ jobs:
   dependency-check:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Check out your code
+      # Step 1: Check out your code (uses v4)
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Step 2: Run the scan and tell it to create 'report.html'
+      # Step 2: Run the scan (uses @main)
       - name: Run OWASP Dependency-Check
-        # This is corrected to v6
-        uses: dependency-check/Dependency-Check_Action@v6
+        uses: dependency-check/Dependency-Check_Action@main
         env:
           SCAN_PATH: "." 
           FORMAT: "HTML"
           
-      # Step 3: Save the report as a downloadable file
+      # Step 3: Save the report as a downloadable file (uses v4)
       - name: Upload Report
-        # This is corrected to v4
         uses: actions/upload-artifact@v4
         with:
           name: security-report 
