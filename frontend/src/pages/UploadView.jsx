@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../api';
 import { Modal, UserForm } from '../components';
+import PropTypes from 'prop-types'; // 1. IMPORT PROPTYPES
 
 // --- View 3: UploadView (for 'user' role) ---
 export function UploadView({ token, onLogout, currentUser }) {
@@ -111,7 +112,8 @@ export function UploadView({ token, onLogout, currentUser }) {
       setTimeout(() => setIsModalOpen(false), 1500);
       
     } catch(err) {
-      setModalMessage({ type: 'error', text: err.message.split('\n').map((msg, i) => <div key={i}>{msg}</div>) });
+      // --- FIX: Use 'msg' for the key instead of array index 'i' ---
+      setModalMessage({ type: 'error', text: err.message.split('\n').map((msg) => <div key={msg}>{msg}</div>) });
     }
   };
 
@@ -144,8 +146,6 @@ export function UploadView({ token, onLogout, currentUser }) {
       {error && <div className="text-red-500 text-sm text-center p-3 bg-red-100 rounded">{error}</div>}
       {success && <div className="text-green-500 text-sm text-center p-3 bg-green-100 rounded">{success}</div>}
 
-      {/* --- *** MODIFICATION *** --- */}
-      {/* The conditional upload block is GONE. All users can upload. */}
       <form className="space-y-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg" onSubmit={handleUploadSubmit}>
         <div>
           <label htmlFor="files_to_upload" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Upload Files (txt, csv, png, mp4, etc.)</label>
@@ -167,13 +167,13 @@ export function UploadView({ token, onLogout, currentUser }) {
           Upload
         </button>
       </form>
-      {/* --- *** END OF MODIFICATION *** --- */}
       
       {/* --- My Files List --- */}
       <div>
         <h3 className="text-lg font-medium text-gray-900 dark:text-white">My Uploaded Files</h3>
         <div className="mt-2 space-y-2 max-h-60 overflow-y-auto p-3 bg-gray-50 dark:bg-gray-700 rounded">
           {myFiles.length > 0 ? (
+            // --- 2. FIX: Use 'file.id' for the key ---
             myFiles.map(file => (
               <div key={file.id} className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded">
                 <span className="text-sm text-gray-700 dark:text-gray-300">{file.filename}</span>
@@ -215,3 +215,14 @@ export function UploadView({ token, onLogout, currentUser }) {
     </div>
   );
 }
+
+// --- 3. ADD PROPTYPES BLOCK ---
+UploadView.propTypes = {
+  token: PropTypes.string.isRequired,
+  onLogout: PropTypes.func.isRequired,
+  currentUser: PropTypes.shape({
+    name: PropTypes.string,
+    profile_pic: PropTypes.string,
+    selected_date: PropTypes.string,
+  }).isRequired,
+};

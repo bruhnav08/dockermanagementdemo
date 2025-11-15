@@ -5,6 +5,7 @@ import api from './api';
 import { LoginForm, RegistrationForm, UploadView, UserDashboard } from './pages';
 import { ThemeToggle } from './components';
 import { useDarkMode } from './hooks';
+import PropTypes from 'prop-types'; // 1. IMPORT PROPTYPES
 
 // ===================================================================================
 // --- File 4: src/App.jsx ---
@@ -67,7 +68,8 @@ export default function App() {
         setView('login');
       }
     }
-  }, [token, currentUser]); // Rerun if token changes OR currentUser is cleared
+    // --- FIX: Added 'view' to dependency array ---
+  }, [token, currentUser, view]);
   
   // This effect listens for global auth errors or profile updates
   useEffect(() => {
@@ -99,12 +101,13 @@ export default function App() {
     setToken(apiToken);
   };
   
-  const handleRegisterSuccess = (apiToken, role) => {
-    if (role.toLowerCase() === 'user') {
-      localStorage.setItem('authToken', apiToken);
-    }
-    setToken(apiToken);
-  };
+  // --- FIX: REMOVED DUPLICATE FUNCTION ---
+  // const handleRegisterSuccess = (apiToken, role) => {
+  //   if (role.toLowerCase() === 'user') {
+  //     localStorage.setItem('authToken', apiToken);
+  //   }
+  //   setToken(apiToken);
+  // };
 
   const handleLogout = () => {
     setToken(null);
@@ -135,7 +138,8 @@ export default function App() {
     
     // If not logged in, show login or register
     if (view === 'register') {
-      return <RegistrationForm onRegisterSuccess={handleRegisterSuccess} onNavigateToLogin={() => setView('login')} />;
+      // --- FIX: Point to the correct function ---
+      return <RegistrationForm onRegisterSuccess={handleLoginSuccess} onNavigateToLogin={() => setView('login')} />;
     }
     return <LoginForm onLoginSuccess={handleLoginSuccess} onNavigateToRegister={() => setView('register')} />;
   };
@@ -149,3 +153,6 @@ export default function App() {
     </div>
   );
 }
+
+// --- 2. ADD PROPTYPES BLOCK ---
+App.propTypes = {};

@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types'; // 1. IMPORT PROPTYPES
 
 // --- NEW: Theme Toggle Button ---
 export function ThemeToggle({ isDarkMode, setIsDarkMode }) {
@@ -12,3 +13,9 @@ export function ThemeToggle({ isDarkMode, setIsDarkMode }) {
     </button>
   );
 }
+
+// --- 2. ADD PROPTYPES BLOCK ---
+ThemeToggle.propTypes = {
+  isDarkMode: PropTypes.bool.isRequired,
+  setIsDarkMode: PropTypes.func.isRequired,
+};

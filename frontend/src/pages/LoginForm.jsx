@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import api from '../api'; // Note the '../api' path
+import PropTypes from 'prop-types'; // 1. IMPORT PROPTYPES
 
 // --- View 1: LoginForm ---
 export function LoginForm({ onLoginSuccess, onNavigateToRegister }) {
@@ -68,3 +69,9 @@ export function LoginForm({ onLoginSuccess, onNavigateToRegister }) {
     </div>
   );
 }
+
+// --- 2. ADD PROPTYPES BLOCK ---
+LoginForm.propTypes = {
+  onLoginSuccess: PropTypes.func.isRequired,
+  onNavigateToRegister: PropTypes.func.isRequired,
+};

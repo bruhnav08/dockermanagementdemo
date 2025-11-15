@@ -1,23 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
+import PropTypes from 'prop-types'; // 1. IMPORT PROPTYPES
 
 // --- Reusable Component: UserForm ---
 export function UserForm({ 
   initialData, 
   onSubmit, 
-  isCreate = false,
-  submitButtonText = "Save",
-  showPassword = true,
-  showRole = false,
-  roleOptions = ['user', 'admin', 'employee'], 
-  isEdit = false,
-  allowEmailEdit = false, 
-  showSettings = true, 
-  // --- *** REMOVED old showStatus/showPremium props *** ---
-  // --- *** NEW PROPS for new fields *** ---
-  showAccountType = false,
-  showSensitiveStorage = false
-  // --- *** END OF NEW PROPS *** ---
+  isCreate,
+  submitButtonText,
+  showPassword,
+  showRole,
+  roleOptions, 
+  isEdit,
+  allowEmailEdit, 
+  showSettings, 
+  showAccountType,
+  showSensitiveStorage
 }) {
   const [formData, setFormData] = useState(initialData);
   const [profilePicFile, setProfilePicFile] = useState(null);
@@ -39,14 +37,12 @@ export function UserForm({
     if (data.selected_date) {
         data.selected_date = data.selected_date.split('T')[0];
     }
-    // --- *** NEW: Ensure new fields have defaults *** ---
     if (!data.account_type) {
       data.account_type = 'personal'; // Default for forms
     }
     if (data.needs_sensitive_storage === undefined) {
       data.needs_sensitive_storage = false; // Default for forms
     }
-    // --- *** END OF NEW DEFAULTS *** ---
     
     setFormData(data);
     setPreviewUrl(data.profile_pic || null);
@@ -247,3 +243,44 @@ export function UserForm({
     </form>
   );
 }
+
+// --- 2. ADD PROPTYPES BLOCK ---
+UserForm.propTypes = {
+  initialData: PropTypes.shape({
+    name: PropTypes.string,
+    email: PropTypes.string,
+    password: PropTypes.string,
+    role: PropTypes.string,
+    selected_date: PropTypes.string,
+    agreed_to_terms: PropTypes.bool,
+    email_notifications: PropTypes.bool,
+    account_type: PropTypes.string,
+    needs_sensitive_storage: PropTypes.bool,
+    profile_pic: PropTypes.string, // Validates initialData.profile_pic
+  }).isRequired,
+  onSubmit: PropTypes.func.isRequired,
+  isCreate: PropTypes.bool,
+  submitButtonText: PropTypes.string,
+  showPassword: PropTypes.bool,
+  showRole: PropTypes.bool,
+  roleOptions: PropTypes.arrayOf(PropTypes.string),
+  isEdit: PropTypes.bool,
+  allowEmailEdit: PropTypes.bool,
+  showSettings: PropTypes.bool,
+  showAccountType: PropTypes.bool,
+  showSensitiveStorage: PropTypes.bool,
+};
+
+// --- 3. ADD DEFAULTPROPS BLOCK ---
+UserForm.defaultProps = {
+  isCreate: false,
+  submitButtonText: "Save",
+  showPassword: true,
+  showRole: false,
+  roleOptions: ['user', 'admin', 'employee'],
+  isEdit: false,
+  allowEmailEdit: false,
+  showSettings: true,
+  showAccountType: false,
+  showSensitiveStorage: false,
+};

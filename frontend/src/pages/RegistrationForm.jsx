@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import api from '../api';
 import { UserForm } from '../components';
+import PropTypes from 'prop-types'; // 1. IMPORT PROPTYPES
 
 // --- View 2: RegistrationForm ---
 export function RegistrationForm({ onRegisterSuccess, onNavigateToLogin }) {
@@ -39,7 +40,8 @@ export function RegistrationForm({ onRegisterSuccess, onNavigateToLogin }) {
       setTimeout(() => onRegisterSuccess(result.token, result.role), 1500);
     } catch (err) {
       // Format backend error messages
-      setError(err.message.split('\n').map((msg, i) => <div key={i}>{msg}</div>));
+      // --- 2. FIX: Use 'msg' for the key instead of array index 'i' ---
+      setError(err.message.split('\n').map((msg) => <div key={msg}>{msg}</div>));
     }
   };
 
@@ -73,3 +75,9 @@ export function RegistrationForm({ onRegisterSuccess, onNavigateToLogin }) {
     </div>
   );
 }
+
+// --- 3. ADD PROPTYPES BLOCK ---
+RegistrationForm.propTypes = {
+  onRegisterSuccess: PropTypes.func.isRequired,
+  onNavigateToLogin: PropTypes.func.isRequired,
+};

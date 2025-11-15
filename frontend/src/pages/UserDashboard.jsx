@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import api from '../api';
 import { Modal, Pagination, UserForm } from '../components';
 import { useDebounce } from '../hooks';
+import PropTypes from 'prop-types'; // 1. IMPORT PROPTYPES
 
 // Hook to detect clicks outside an element
 function useClickOutside(ref, handler) {
@@ -46,8 +47,9 @@ function FilterMenu({
     <div className="absolute z-10 top-12 right-0 w-80 p-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl space-y-4">
       {/* Roles Section */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Role</label>
-        <div className="flex flex-col mt-2 space-y-1">
+        {/* --- FIX: Added htmlFor --- */}
+        <label id="filter-by-role-label" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Role</label>
+        <div role="group" aria-labelledby="filter-by-role-label" className="flex flex-col mt-2 space-y-1">
           {ALL_ROLES.map(role => (
             <label key={role} className="flex items-center space-x-2 cursor-pointer">
               <input
@@ -64,8 +66,9 @@ function FilterMenu({
       
       {/* Account Type Section */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Account Type</label>
-        <div className="flex flex-col mt-2 space-y-1">
+        {/* --- FIX: Added htmlFor --- */}
+        <label id="filter-by-account-label" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Account Type</label>
+        <div role="group" aria-labelledby="filter-by-account-label" className="flex flex-col mt-2 space-y-1">
           {ALL_ACCOUNT_TYPES.map(type => (
             <label key={type} className="flex items-center space-x-2 cursor-pointer">
               <input
@@ -82,8 +85,9 @@ function FilterMenu({
       
       {/* Sensitive Storage Section */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Storage Needs</label>
-        <div className="flex flex-col mt-2 space-y-1">
+        {/* --- FIX: Added htmlFor --- */}
+        <label id="filter-by-storage-label" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Storage Needs</label>
+        <div role="group" aria-labelledby="filter-by-storage-label" className="flex flex-col mt-2 space-y-1">
           {[
             { label: 'All', value: 'all' },
             { label: 'Yes (Sensitive)', value: 'true' },
@@ -106,22 +110,26 @@ function FilterMenu({
 
       {/* Date Range Section */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Date Joined</label>
+        <label htmlFor="start-date-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Date Joined</label>
         <div className="mt-2 space-y-2">
           <input
+            id="start-date-filter" // --- FIX: Added id ---
             type="date"
             value={startDate}
             onChange={(e) => onStartDateChange(e.target.value)}
             className="w-full px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             placeholder="From"
+            aria-label="Start date" // Added label for accessibility
           />
           <input
+            id="end-date-filter" // --- FIX: Added id ---
             type="date"
             value={endDate}
             onChange={(e) => onEndDateChange(e.target.value)}
             min={startDate}
             className="w-full px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             placeholder="To"
+            aria-label="End date" // Added label for accessibility
           />
         </div>
       </div>
@@ -135,6 +143,22 @@ function FilterMenu({
     </div>
   );
 }
+
+// --- 2. ADD PROPTYPES BLOCK ---
+FilterMenu.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  selectedRoles: PropTypes.arrayOf(PropTypes.string).isRequired,
+  onRoleChange: PropTypes.func.isRequired,
+  selectedAccountTypes: PropTypes.arrayOf(PropTypes.string).isRequired,
+  onAccountTypeChange: PropTypes.func.isRequired,
+  selectedSensitivity: PropTypes.string.isRequired,
+  onSensitivityChange: PropTypes.func.isRequired,
+  startDate: PropTypes.string.isRequired,
+  onStartDateChange: PropTypes.func.isRequired,
+  endDate: PropTypes.string.isRequired,
+  onEndDateChange: PropTypes.func.isRequired,
+  onClearFilters: PropTypes.func.isRequired,
+};
 
 // --- ExpandedRowContent Component (Extracted to reduce complexity) ---
 function ExpandedRowContent({ 
@@ -174,6 +198,7 @@ function ExpandedRowContent({
             </div>
             {user.gallery && user.gallery.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {/* --- FIX: Use file.id as key --- */}
                 {user.gallery.map(file => (
                   <div key={file.id} className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded shadow-sm">
                     <span className="text-sm text-indigo-600 dark:text-indigo-300 truncate" title={file.filename}>
@@ -208,6 +233,39 @@ function ExpandedRowContent({
       </td>
     </tr>
   );
+}
+
+// --- 2. ADD PROPTYPES BLOCK ---
+ExpandedRowContent.propTypes = {
+  user: PropTypes.shape({
+    id: PropTypes.string.isRequired,
+    needs_sensitive_storage: PropTypes.bool,
+    role: PropTypes.string,
+    gallery: PropTypes.arrayOf(PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      filename: PropTypes.string.isRequired,
+    })),
+  }).isRequired,
+  isAdmin: PropTypes.bool.isRequired,
+  fileManagementError: PropTypes.string,
+  onFileAddClick: PropTypes.func.isRequired,
+  onFileDownload: PropTypes.func.isRequired,
+  onFileDelete: PropTypes.func.isRequired,
+};
+ExpandedRowContent.defaultProps = {
+  fileManagementError: null,
+};
+
+
+// --- FIX: Extracted helper to remove nested ternary ---
+function getRoleClassName(role) {
+  if (role === 'admin') {
+    return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+  }
+  if (role === 'employee') {
+    return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+  }
+  return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
 }
 
 // --- UserRow Component (Extracted to reduce complexity) ---
@@ -245,11 +303,8 @@ function UserRow({
         </td>
         <td className="p-3 text-sm text-gray-700 dark:text-gray-300">{user.email || 'N/A'}</td>
         <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
-          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-            user.role === 'admin' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-            user.role === 'employee' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
-            'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-          }`}>
+          {/* --- FIX: Use helper function --- */}
+          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleClassName(user.role)}`}>
             {user.role}
           </span>
         </td>
@@ -300,8 +355,30 @@ function UserRow({
   );
 }
 
+// --- 2. ADD PROPTYPES BLOCK ---
+UserRow.propTypes = {
+  user: PropTypes.shape({
+    id: PropTypes.string.isRequired,
+    profile_pic: PropTypes.string,
+    name: PropTypes.string.isRequired,
+    email: PropTypes.string,
+    role: PropTypes.string.isRequired,
+    account_type: PropTypes.string,
+    gallery: PropTypes.array,
+    created_date: PropTypes.string,
+  }).isRequired,
+  isAdmin: PropTypes.bool.isRequired,
+  isExpanded: PropTypes.bool.isRequired,
+  onRowClick: PropTypes.func.isRequired,
+  getFullImageUrl: PropTypes.func.isRequired,
+  onEditClick: PropTypes.func.isRequired,
+  onDeleteClick: PropTypes.func.isRequired,
+  fileManagementError: PropTypes.string,
+  onFileAddClick: PropTypes.func.isRequired,
+  onFileDownload: PropTypes.func.isRequired,
+  onFileDelete: PropTypes.func.isRequired,
+};
 
-// --- START: REFACTOR FOR L393 (Cognitive Complexity) ---
 
 /**
  * Handles the logic for saving a staff member (create or update).
@@ -335,18 +412,20 @@ async function _executeSaveStaff(
     }
     
   } catch (err) {
-    setStaffModalMessage({ type: 'error', text: err.message.split('\n').map((msg, i) => <div key={i}>{msg}</div>) });
+    // --- FIX: Use 'msg' for the key instead of array index 'i' ---
+    setStaffModalMessage({ type: 'error', text: err.message.split('\n').map((msg) => <div key={msg}>{msg}</div>) });
   }
 }
 
 /**
  * Handles the logic for saving a user (create or update).
+ * --- FIX: Use a single props object to pass args ---
  */
-async function _executeSaveUser(
+async function _executeSaveUser({
   formData, profilePicFile, token, editingUser,
   setUserModalError, closeUserModal,
   resetFiltersAndFetch, fetchUsers
-) {
+}) {
   setUserModalError(null);
   const data = new FormData();
   const isCreating = !editingUser?.id;
@@ -378,7 +457,8 @@ async function _executeSaveUser(
     }
 
   } catch (err) {
-    setUserModalError(err.message.split('\n').map((msg, i) => <div key={i}>{msg}</div>));
+    // --- FIX: Use 'msg' for the key instead of array index 'i' ---
+    setUserModalError(err.message.split('\n').map((msg) => <div key={msg}>{msg}</div>));
   }
 }
 
@@ -550,11 +630,12 @@ function useUserDashboardState(token, currentUser) {
   };
   
   const handleSaveUser = (formData, profilePicFile) => {
-    _executeSaveUser(
+    // --- FIX: Pass args as an object ---
+    _executeSaveUser({
       formData, profilePicFile, token, editingUser,
       setUserModalError, closeUserModal,
       resetFiltersAndFetch, fetchUsers
-    );
+    });
   };
 
   const handleDeleteUser = async (id) => {
@@ -712,6 +793,19 @@ function DashboardHeader({ currentUser, isAdmin, onLogout, onCreateUserClick, on
   );
 }
 
+// --- 2. ADD PROPTYPES BLOCK ---
+DashboardHeader.propTypes = {
+  currentUser: PropTypes.shape({
+    name: PropTypes.string,
+    role: PropTypes.string,
+  }).isRequired,
+  isAdmin: PropTypes.bool.isRequired,
+  onLogout: PropTypes.func.isRequired,
+  onCreateUserClick: PropTypes.func.isRequired,
+  onCreateStaffClick: PropTypes.func.isRequired,
+};
+
+
 function SearchFilterBar({ 
   searchTerm, onSearchChange, filterMenuRef, onFilterToggle, isFilterMenuOpen,
   filterProps 
@@ -742,6 +836,53 @@ function SearchFilterBar({
       </div>
     </div>
   );
+}
+
+// --- 2. ADD PROPTYPES BLOCK ---
+SearchFilterBar.propTypes = {
+  searchTerm: PropTypes.string.isRequired,
+  onSearchChange: PropTypes.func.isRequired,
+  filterMenuRef: PropTypes.oneOfType([
+    PropTypes.func, 
+    PropTypes.shape({ current: PropTypes.instanceOf(Element) })
+  ]),
+  onFilterToggle: PropTypes.func.isRequired,
+  isFilterMenuOpen: PropTypes.bool.isRequired,
+  filterProps: PropTypes.object.isRequired,
+};
+
+
+// --- FIX: Extracted helper to remove nested ternary ---
+function renderTableBody(
+  loading, error, isAdmin, users, expandedRowId, fileManagementError,
+  onRowClick, onEditClick, onDeleteClick, onFileAddClick, onFileDownload, onFileDelete
+) {
+  if (loading) {
+    return (
+      <tr><td colSpan={isAdmin ? 7 : 6} className="p-4 text-center text-gray-500 dark:text-gray-400">Loading users...</td></tr>
+    );
+  }
+  if (error) {
+    return (
+      <tr><td colSpan={isAdmin ? 7 : 6} className="p-4 text-center text-red-500">Failed to load users.</td></tr>
+    );
+  }
+  return users.map(user => (
+    <UserRow
+      key={user.id}
+      user={user}
+      isAdmin={isAdmin}
+      isExpanded={expandedRowId === user.id}
+      onRowClick={onRowClick}
+      getFullImageUrl={getFullImageUrl}
+      onEditClick={onEditClick}
+      onDeleteClick={onDeleteClick}
+      fileManagementError={fileManagementError}
+      onFileAddClick={onFileAddClick}
+      onFileDownload={onFileDownload}
+      onFileDelete={onFileDelete}
+    />
+  ));
 }
 
 function UserTable({ 
@@ -780,33 +921,35 @@ function UserTable({
           </tr>
         </thead>
         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-          {loading ? (
-            <tr><td colSpan={isAdmin ? 7 : 6} className="p-4 text-center text-gray-500 dark:text-gray-400">Loading users...</td></tr>
-          ) : error ? (
-            <tr><td colSpan={isAdmin ? 7 : 6} className="p-4 text-center text-red-500">Failed to load users.</td></tr>
-          ) : (
-            users.map(user => (
-              <UserRow
-                key={user.id}
-                user={user}
-                isAdmin={isAdmin}
-                isExpanded={expandedRowId === user.id}
-                onRowClick={onRowClick}
-                getFullImageUrl={getFullImageUrl}
-                onEditClick={onEditClick}
-                onDeleteClick={onDeleteClick}
-                fileManagementError={fileManagementError}
-                onFileAddClick={onFileAddClick}
-                onFileDownload={onFileDownload}
-                onFileDelete={onFileDelete}
-              />
-            ))
+          {/* --- FIX: Use helper function --- */}
+          {renderTableBody(
+            loading, error, isAdmin, users, expandedRowId, fileManagementError,
+            onRowClick, onEditClick, onDeleteClick, onFileAddClick, onFileDownload, onFileDelete
           )}
         </tbody>
       </table>
     </div>
   );
 }
+
+// --- 2. ADD PROPTYPES BLOCK ---
+UserTable.propTypes = {
+  loading: PropTypes.bool.isRequired,
+  error: PropTypes.string,
+  isAdmin: PropTypes.bool.isRequired,
+  users: PropTypes.array.isRequired,
+  expandedRowId: PropTypes.string,
+  fileManagementError: PropTypes.string,
+  onSort: PropTypes.func.isRequired,
+  onRowClick: PropTypes.func.isRequired,
+  onEditClick: PropTypes.func.isRequired,
+  onDeleteClick: PropTypes.func.isRequired,
+  onFileAddClick: PropTypes.func.isRequired,
+  onFileDownload: PropTypes.func.isRequired,
+  onFileDelete: PropTypes.func.isRequired,
+  sortBy: PropTypes.string.isRequired,
+  sortOrder: PropTypes.string.isRequired,
+};
 
 function DashboardModals({
   isStaffModalOpen, closeStaffModal, staffModalMessage, editingStaff, initialStaffData, handleSaveStaff,
@@ -861,6 +1004,25 @@ function DashboardModals({
     </>
   );
 }
+
+// --- 2. ADD PROPTYPES BLOCK ---
+DashboardModals.propTypes = {
+  isStaffModalOpen: PropTypes.bool.isRequired,
+  closeStaffModal: PropTypes.func.isRequired,
+  staffModalMessage: PropTypes.shape({
+    type: PropTypes.string,
+    text: PropTypes.oneOfType([PropTypes.string, PropTypes.node]),
+  }).isRequired,
+  editingStaff: PropTypes.object,
+  initialStaffData: PropTypes.object.isRequired,
+  handleSaveStaff: PropTypes.func.isRequired,
+  isUserModalOpen: PropTypes.bool.isRequired,
+  closeUserModal: PropTypes.func.isRequired,
+  userModalError: PropTypes.oneOfType([PropTypes.string, PropTypes.node]),
+  editingUser: PropTypes.object,
+  initialUserData: PropTypes.object.isRequired,
+  handleSaveUser: PropTypes.func.isRequired,
+};
 
 
 // --- View 4: UserDashboard (This is now simple) ---
@@ -979,4 +1141,13 @@ export function UserDashboard({ token, onLogout, currentUser }) {
     </div>
   );
 }
-// --- END: REFACTOR FOR L393 ---
+
+// --- 2. ADD PROPTYPES BLOCK ---
+UserDashboard.propTypes = {
+  token: PropTypes.string.isRequired,
+  onLogout: PropTypes.func.isRequired,
+  currentUser: PropTypes.shape({
+    name: PropTypes.string,
+    role: PropTypes.string,
+  }).isRequired,
+};

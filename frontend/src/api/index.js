@@ -4,18 +4,16 @@
 // ===================================================================================
 
 class API {
-  constructor(baseUrl) {
-    this.baseUrl = baseUrl;
-  }
-
-  // --- START: REFACTOR FOR SONARCLOUD ISSUE 17 ---
+  constructor(baseUrl) {
+    this.baseUrl = baseUrl;
+  }
 
   /**
    * Helper to handle JSON responses
    * @private
    */
   async _handleJsonResponse(response) {
-    const data = await response.json(); 
+    const data = await response.json();
     if (!response.ok) {
       // This will correctly show "Invalid email or password"
       // or any other error from the backend.
@@ -38,213 +36,214 @@ class API {
         throw new Error(e.message || "File download failed");
       }
     }
-    
+
     // This is a file download
     const blob = await response.blob();
     let filename = 'downloaded_file';
     const contentDisposition = response.headers.get('Content-Disposition');
-    
+
     if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="(.+?)"/);
-        if (filenameMatch && filenameMatch.length > 1) {
-            filename = filenameMatch[1];
-        }
+      const filenameMatch = contentDisposition.match(/filename="(.+?)"/);
+      if (filenameMatch && filenameMatch.length > 1) {
+        filename = filenameMatch[1];
+      }
     }
-    
+
     const link = document.createElement('a');
     link.href = window.URL.createObjectURL(blob);
     link.setAttribute('download', filename);
     document.body.appendChild(link);
     link.click();
-    link.parentNode.removeChild(link);
+
+    // --- THIS IS THE FIX ---
+    link.remove(); // Replaced parentNode.removeChild(link)
+    // --- END OF FIX ---
+
     window.URL.revokeObjectURL(link.href);
     return { message: "File downloaded" };
   }
 
-  /**
-   * Universal request handler (Refactored)
-   */
-  async request(endpoint, options = {}) {
-    const { method = 'GET', body = null, token = null, isFormData = false, isFileDownload = false } = options;
-    const url = `${this.baseUrl}${endpoint}`;
+  /**
+   * Universal request handler (Refactored)
+   */
+  async request(endpoint, options = {}) {
+    const { method = 'GET', body = null, token = null, isFormData = false, isFileDownload = false } = options;
+    const url = `${this.baseUrl}${endpoint}`;
 
-    const headers = new Headers();
-    if (!isFormData) {
-      headers.append('Content-Type', 'application/json');
-    }
-    if (token) {
-      headers.append('Authorization', `Bearer ${token}`);
-    }
+    const headers = new Headers();
+    if (!isFormData) {
+      headers.append('Content-Type', 'application/json');
+    }
+    if (token) {
+      headers.append('Authorization', `Bearer ${token}`);
+    }
 
-    const config = {
-      method,
-      headers,
-    };
+    const config = {
+      method,
+      headers,
+    };
 
-    if (body) {
-      config.body = isFormData ? body : JSON.stringify(body);
-    }
+    if (body) {
+      config.body = isFormData ? body : JSON.stringify(body);
+    }
 
-    try {
-      const response = await fetch(url, config);
-      
-      if (response.status === 401 && token) { 
-        window.dispatchEvent(new Event('auth-error'));
-        throw new Error("Session expired. Please login again.");
-      }
+    try {
+      const response = await fetch(url, config);
 
-      // --- Refactored logic: Delegate to helpers ---
+      if (response.status === 401 && token) {
+        window.dispatchEvent(new Event('auth-error'));
+        throw new Error("Session expired. Please login again.");
+      }
+
       if (isFileDownload) {
         return await this._handleFileDownload(response);
       }
-      
+
       return await this._handleJsonResponse(response);
-      // --- End of refactored logic ---
 
-    } catch (error) {
-      if (error.message !== "Session expired. Please login again.") {
-        console.error('API request failed:', error);
-      }
-      throw error;
-    }
-  }
-  // --- END: REFACTOR FOR SONARCLOUD ISSUE 17 ---
+    } catch (error) {
+      if (error.message !== "Session expired. Please login again.") {
+        console.error('API request failed:', error);
+      }
+      throw error;
+    }
+  }
 
-  // --- Auth Methods ---
-  login(email, password) {
-    return this.request('/login', {
-      method: 'POST',
-      body: { email, password },
-    });
-  }
+  // --- Auth Methods ---
+  login(email, password) {
+    return this.request('/login', {
+      method: 'POST',
+      body: { email, password },
+    });
+  }
 
-  register(formData) {
-    return this.request('/register', {
-      method: 'POST',
-      body: formData,
-      isFormData: true,
-    });
-  }
-  
-  getMe(token) {
-    return this.request('/me', { token });
-  }
+  register(formData) {
+    return this.request('/register', {
+      method: 'POST',
+      body: formData,
+      isFormData: true,
+    });
+  }
 
-  // --- 'User' Role Methods ---
-  uploadFiles(formData, token) {
-    return this.request('/upload', {
-      method: 'POST',
-      body: formData,
-      token,
-      isFormData: true,
-    });
-  }
-  
-  getMyFiles(token) {
-    return this.request('/my-files', { token });
-  }
-  
-  updateMyProfile(profileData, token) {
-    return this.request('/my-profile', {
-        method: 'PUT',
-        body: profileData,
-        token,
-    });
-  }
-  
-  updateMyProfilePic(formData, token) {
-    return this.request('/my-profile/pic', {
-        method: 'POST',
-        body: formData,
-        token,
-        isFormData: true,
-    });
-  }
-  
-  // --- Admin/Employee Methods ---
-  getUsers(params, token) {
-    const query = new URLSearchParams(params).toString();
-    return this.request(`/users?${query}`, { token });
-  }
+  getMe(token) {
+    return this.request('/me', { token });
+  }
 
-  downloadFile(fileId, token) {
-    // --- FIX: Tell the request function to expect a file ---
-    return this.request(`/file/${fileId}`, { token, isFileDownload: true });
-  }
-  
-  // --- NEW: Staff Management Methods ---
-  getStaff(token) {
-    return this.request('/staff', { token });
-  }
+  // --- 'User' Role Methods ---
+  uploadFiles(formData, token) {
+    return this.request('/upload', {
+      method: 'POST',
+      body: formData,
+      token,
+      isFormData: true,
+    });
+  }
 
-  createStaff(userData, token) {
-    // --- FIX: Route was /staff, backend has /users ---
-    return this.request('/users', {
-      method: 'POST',
-      body: userData,
-      token,
-    });
-  }
-  
-  updateStaff(id, userData, token) {
-    // --- FIX: Route was /staff/:id, backend has /users/:id ---
-    return this.request(`/users/${id}`, {
-      method: 'PUT',
-      body: userData,
-      token,
-    });
-  }
-  
-  deleteStaff(id, token) {
-     return this.request(`/staff/${id}`, {
-      method: 'DELETE',
-      token,
-    });
-  }
-  
-  // --- NEW: Admin-Create-User Method ---
-  adminCreateUser(formData, token) {
-    return this.request('/admin/create-user', {
-        method: 'POST',
-        body: formData,
-        token,
-        isFormData: true,
-    });
-  }
-  
-  // --- NEW: Admin-Update-User Method ---
-  adminUpdateUser(id, formData, token) {
-    return this.request(`/admin/update-user/${id}`, {
-        method: 'POST', // Use POST for multipart/form-data
-        body: formData,
-        token,
-        isFormData: true,
-    });
-  }
+  getMyFiles(token) {
+    return this.request('/my-files', { token });
+  }
 
-  deleteUser(id, token) {
-    return this.request(`/users/${id}`, {
-      method: 'DELETE',
-      token,
-    });
-  }
+  updateMyProfile(profileData, token) {
+    return this.request('/my-profile', {
+      method: 'PUT',
+      body: profileData,
+      token,
+    });
+  }
 
-  // --- NEW: Admin File Management ---
-  adminAddFile(userId, formData, token) {
-    return this.request(`/admin/user/${userId}/file`, {
-      method: 'POST',
-      body: formData,
-      token,
-      isFormData: true,
-    });
-  }
-  
-  adminDeleteFile(fileId, token) {
-    return this.request(`/admin/user/file/${fileId}`, {
-      method: 'DELETE',
-      token,
-    });
-  }
+  updateMyProfilePic(formData, token) {
+    return this.request('/my-profile/pic', {
+      method: 'POST',
+      body: formData,
+      token,
+      isFormData: true,
+    });
+  }
+
+  // --- Admin/Employee Methods ---
+  getUsers(params, token) {
+    const query = new URLSearchParams(params).toString();
+    return this.request(`/users?${query}`, { token });
+  }
+
+  downloadFile(fileId, token) {
+    // --- FIX: Tell the request function to expect a file ---
+    return this.request(`/file/${fileId}`, { token, isFileDownload: true });
+  }
+
+  // --- NEW: Staff Management Methods ---
+  getStaff(token) {
+    return this.request('/staff', { token });
+  }
+
+  createStaff(userData, token) {
+    // --- FIX: Route was /staff, backend has /users ---
+    return this.request('/users', {
+      method: 'POST',
+      body: userData,
+      token,
+    });
+  }
+
+  updateStaff(id, userData, token) {
+    // --- FIX: Route was /staff/:id, backend has /users/:id ---
+    return this.request(`/users/${id}`, {
+      method: 'PUT',
+      body: userData,
+      token,
+    });
+  }
+
+  deleteStaff(id, token) {
+    return this.request(`/staff/${id}`, {
+      method: 'DELETE',
+      token,
+    });
+  }
+
+  // --- NEW: Admin-Create-User Method ---
+  adminCreateUser(formData, token) {
+    return this.request('/admin/create-user', {
+      method: 'POST',
+      body: formData,
+      token,
+      isFormData: true,
+    });
+  }
+
+  // --- NEW: Admin-Update-User Method ---
+  adminUpdateUser(id, formData, token) {
+    return this.request(`/admin/update-user/${id}`, {
+      method: 'POST', // Use POST for multipart/form-data
+      body: formData,
+      token,
+      isFormData: true,
+    });
+  }
+
+  deleteUser(id, token) {
+    return this.request(`/users/${id}`, {
+      method: 'DELETE',
+      token,
+    });
+  }
+
+  // --- NEW: Admin File Management ---
+  adminAddFile(userId, formData, token) {
+    return this.request(`/admin/user/${userId}/file`, {
+      method: 'POST',
+      body: formData,
+      token,
+      isFormData: true,
+    });
+  }
+
+  adminDeleteFile(fileId, token) {
+    return this.request(`/admin/user/file/${fileId}`, {
+      method: 'DELETE',
+      token,
+    });
+  }
 }
 
 // Instantiate and export a single API instance

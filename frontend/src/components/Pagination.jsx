@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types'; // 1. IMPORT PROPTYPES
 
 // --- Reusable Component: Pagination ---
 // ... (no changes needed, but you *can* add dark: classes here too)
@@ -29,3 +30,10 @@ export function Pagination({ currentPage, totalPages, onPageChange }) {
     </div>
   );
 }
+
+// --- 2. ADD PROPTYPES BLOCK ---
+Pagination.propTypes = {
+  currentPage: PropTypes.number.isRequired,
+  totalPages: PropTypes.number.isRequired,
+  onPageChange: PropTypes.func.isRequired,
+};
