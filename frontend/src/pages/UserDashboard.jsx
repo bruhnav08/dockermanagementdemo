@@ -137,8 +137,83 @@ function FilterMenu({
   );
 }
 
-// --- FIX (Issue 18): Extracted UserRow component to reduce complexity ---
+// --- START: REFACTOR FOR L285 (Cognitive Complexity) ---
 //
+// 1. Create a new component for the complex "expanded row" content
+function ExpandedRowContent({ 
+  user, 
+  isAdmin, 
+  fileManagementError, 
+  onFileAddClick, 
+  onFileDownload, 
+  onFileDelete 
+}) {
+  return (
+    <tr className="bg-gray-50 dark:bg-gray-700">
+      <td colSpan={isAdmin ? 7 : 6} className="p-4">
+        <div className="flex justify-between">
+          <div className="text-sm text-gray-700 dark:text-gray-300">
+            <span className="font-semibold">Sensitive Storage Request: </span>
+            {user.needs_sensitive_storage ? (
+              <span className="font-bold text-red-600 dark:text-red-400">Yes</span>
+            ) : (
+              <span className="text-gray-600 dark:text-gray-400">No</span>
+            )}
+          </div>
+          {fileManagementError && (
+            <div className="text-red-500 text-sm text-center mb-2">{fileManagementError}</div>
+          )}
+        </div>
+        {user.role === 'user' ? (
+          <div className="mt-4">
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">File Management:</h4>
+              <button
+                onClick={() => onFileAddClick(user.id)}
+                className="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 text-xs"
+              >
+                Add File
+              </button>
+            </div>
+            {user.gallery && user.gallery.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {user.gallery.map(file => (
+                  <div key={file.id} className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded shadow-sm">
+                    <span className="text-sm text-indigo-600 dark:text-indigo-300 truncate" title={file.filename}>
+                      {file.filename}
+                    </span>
+                    <div>
+                      <button
+                        onClick={() => onFileDownload(file.id, file.filename)}
+                        className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 font-medium mr-3"
+                      >
+                        Download
+                      </button>
+                      <button
+                        onClick={() => onFileDelete(file.id, file.filename)}
+                        className="text-sm text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 font-medium"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">No files uploaded by this user.</p>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
+            This user role ({user.role}) does not have a file gallery.
+          </p>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+// 2. Simplify the original UserRow component
 function UserRow({
   user,
   isAdmin,
@@ -213,72 +288,21 @@ function UserRow({
         )}
       </tr>
       
+      {/* Now, we just render the new component if expanded */}
       {isExpanded && (
-        <tr className="bg-gray-50 dark:bg-gray-700">
-          <td colSpan={isAdmin ? 7 : 6} className="p-4">
-            <div className="flex justify-between">
-              <div className="text-sm text-gray-700 dark:text-gray-300">
-                <span className="font-semibold">Sensitive Storage Request: </span>
-                {user.needs_sensitive_storage ? (
-                  <span className="font-bold text-red-600 dark:text-red-400">Yes</span>
-                ) : (
-                  <span className="text-gray-600 dark:text-gray-400">No</span>
-                )}
-              </div>
-              {fileManagementError && (
-                <div className="text-red-500 text-sm text-center mb-2">{fileManagementError}</div>
-              )}
-            </div>
-            {user.role === 'user' ? (
-              <div className="mt-4">
-                <div className="flex justify-between items-center mb-2">
-                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">File Management:</h4>
-                  <button
-                    onClick={() => onFileAddClick(user.id)}
-                    className="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 text-xs"
-                  >
-                    Add File
-                  </button>
-                </div>
-                {user.gallery && user.gallery.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {user.gallery.map(file => (
-                      <div key={file.id} className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded shadow-sm">
-                        <span className="text-sm text-indigo-600 dark:text-indigo-300 truncate" title={file.filename}>
-                          {file.filename}
-                        </span>
-                        <div>
-                          <button
-                            onClick={() => onFileDownload(file.id, file.filename)}
-                            className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 font-medium mr-3"
-                          >
-                            Download
-                          </button>
-                          <button
-                            onClick={() => onFileDelete(file.id, file.filename)}
-                            className="text-sm text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 font-medium"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500 dark:text-gray-400">No files uploaded by this user.</p>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
-                This user role ({user.role}) does not have a file gallery.
-              </p>
-            )}
-          </td>
-        </tr>
+        <ExpandedRowContent 
+          user={user}
+          isAdmin={isAdmin}
+          fileManagementError={fileManagementError}
+          onFileAddClick={onFileAddClick}
+          onFileDownload={onFileDownload}
+          onFileDelete={onFileDelete}
+        />
       )}
     </React.Fragment>
   );
 }
+// --- END: REFACTOR FOR L285 ---
 
 
 // --- View 4: UserDashboard (This is now simpler) ---

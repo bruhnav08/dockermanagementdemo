@@ -93,11 +93,18 @@ def is_over_18(date_string):
 EMAIL_REGEX = r'^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$'
 ACCOUNT_TYPES = ['personal', 'professional', 'academic'] 
 
-# --- FIX (Issue 1): Refactored to reduce Cognitive Complexity from 21 ---
-#
-# Reason: The original function had complex nested if/elif statements for create vs. update.
-# This refactor flattens the logic by checking for the *condition* to validate (e.g., is_create or 'name' in data)
-# first, then running the validation. This reduces branching and complexity.
+# --- START: REFACTOR FOR L101 (Cognitive Complexity) ---
+
+def _validate_password(password, is_create, data):
+    """Helper to validate password rules."""
+    if is_create:
+        if not password or len(password) < 6:
+            return "Password must be at least 6 characters long."
+    # Check for password update
+    elif 'password' in data and password and len(password) < 6:
+        return "New password must be at least 6 characters long."
+    return None
+
 def validate_user_data(data, is_create=True, check_password=True):
     """Validates user data for creation or updates. Returns a list of error messages."""
     errors = []
@@ -117,20 +124,18 @@ def validate_user_data(data, is_create=True, check_password=True):
         if not email or not re.match(EMAIL_REGEX, email.lower()):
             errors.append("Please provide a valid email address.")
     
-    # Validate Password
+    # Validate Password (using the helper)
     if check_password:
-        if is_create:
-            if not password or len(password) < 6:
-                errors.append("Password must be at least 6 characters long.")
-        elif 'password' in data and password and len(password) < 6:
-            errors.append("New password must be at least 6 characters long.")
+        password_error = _validate_password(password, is_create, data)
+        if password_error:
+            errors.append(password_error)
              
     # Validate Account Type
     if 'account_type' in data and account_type not in ACCOUNT_TYPES:
         errors.append("Invalid account type selected.")
 
     return errors
-# --- End of Refactor ---
+# --- END: REFACTOR FOR L101 ---
 
 
 # --- Role-Based Security Helpers ---
@@ -739,31 +744,43 @@ def create_user(current_user):
     
     return jsonify(serialize_user(new_user, include_email=True)), 201
 
-# --- FIX (Issue 14): Refactored update_user to reduce Cognitive Complexity from 17 ---
+# --- START: REFACTOR FOR L594 (Cognitive Complexity) ---
 #
-# Reason: Similar to admin_update_user, this function had all validation
-# and update logic in one block.
-# This refactor extracts validation to a helper and uses "return early".
-
+# Reason: This function was incorrectly calling the complex `validate_user_data` function.
+# This refactor makes it self-contained and only validates fields relevant to staff.
 def _validate_staff_update(data, user_to_update):
     """Helper to validate admin updates for a staff member."""
-    errors = validate_user_data(data, is_create=False, check_password=True)
+    errors = [] # Start with a fresh list
     user_id = str(user_to_update['_id'])
 
+    # 1. Validate Name
+    name = data.get('name')
+    if 'name' in data and (not name or len(name) < 2):
+        errors.append("Name must be at least 2 characters long.")
+
+    # 2. Validate Email
+    email = data.get('email', '').lower()
+    if 'email' in data and (not email or not re.match(EMAIL_REGEX, email.lower())):
+        errors.append("Please provide a valid email address.")
+    elif email and email != user_to_update.get('email'):
+        existing_user = user_collection.find_one({"email": email})
+        if existing_user and str(existing_user['_id']) != user_id:
+            errors.append(ERROR_MSG_EMAIL_EXISTS)
+    
+    # 3. Validate Password
+    password = data.get('password')
+    if 'password' in data and password and len(password) < 6:
+         errors.append("New password must be at least 6 characters long.")
+
+    # 4. Validate Role
     role = data.get('role')
     if role and role not in ['admin', 'employee']:
          errors.append("Role can only be 'admin' or 'employee'.")
 
+    # 5. Validate Date of Birth
     selected_date = data.get('selected_date')
     if selected_date and not is_over_18(selected_date):
-        # --- FIX (Issue 2): Use constant ---
         errors.append(ERROR_MSG_18_PLUS)
-
-    email = data.get('email', '').lower()
-    if email and email != user_to_update.get('email'):
-        existing_user = user_collection.find_one({"email": email})
-        if existing_user and str(existing_user['_id']) != user_id:
-            errors.append("This email address is already registered by another user.")
     
     return errors
 
@@ -788,10 +805,7 @@ def update_user(current_user, user_id):
             
     data = request.json
     
-    # Remove user-specific fields before validation
-    data.pop('account_type', None) 
-    data.pop('needs_sensitive_storage', None)
-
+    # --- FIX: Call the new, simpler validation function ---
     errors = _validate_staff_update(data, user_to_update)
     if errors:
         return jsonify({"message": "\n".join(errors)}), 400
@@ -816,7 +830,7 @@ def update_user(current_user, user_id):
     
     updated_user = user_collection.find_one({"_id": ObjectId(user_id)})
     return jsonify(serialize_user(updated_user, include_email=True)), 200
-# --- End of Refactor ---
+# --- END: REFACTOR FOR L594 ---
 
 @app.route('/users/<string:user_id>', methods=['DELETE'])
 @token_required
