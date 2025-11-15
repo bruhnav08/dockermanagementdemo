@@ -136,7 +136,7 @@ function FilterMenu({
   );
 }
 
-// --- START: REFACTOR FOR L309 (Cognitive Complexity) ---
+// --- START: REFACTOR FOR L393 (Cognitive Complexity) ---
 //
 // 1. Create a new component for the complex "expanded row" content
 function ExpandedRowContent({ 
@@ -301,10 +301,10 @@ function UserRow({
     </React.Fragment>
   );
 }
-// --- END: REFACTOR FOR L309 (Step 1/2) ---
+// --- END: REFACTOR FOR L393 (Step 1/2) ---
 
 
-// --- START: REFACTOR FOR L309 (Step 2/2) ---
+// --- START: REFACTOR FOR L393 (Step 2/2) ---
 //
 // 3. Create helper functions for the most complex logic (save handlers)
 //    These live *outside* the UserDashboard component.
@@ -859,4 +859,4 @@ export function UserDashboard({ token, onLogout, currentUser }) {
     </div>
   );
 }
-// --- END: REFACTOR FOR L309 ---
+// --- END: REFACTOR FOR L393 ---

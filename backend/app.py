@@ -90,8 +90,6 @@ def is_over_18(date_string):
 EMAIL_REGEX = r'^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$'
 ACCOUNT_TYPES = ['personal', 'professional', 'academic'] 
 
-# --- START: REFACTOR FOR L101 (Cognitive Complexity) ---
-
 def _validate_password(password, is_create, data):
     """Helper to validate password rules."""
     if is_create:
@@ -132,7 +130,6 @@ def validate_user_data(data, is_create=True, check_password=True):
         errors.append("Invalid account type selected.")
 
     return errors
-# --- END: REFACTOR FOR L101 ---
 
 
 # --- Role-Based Security Helpers ---
@@ -707,7 +704,7 @@ def create_user(current_user):
     return jsonify(serialize_user(new_user, include_email=True)), 201
 
 
-# --- START: REFACTOR FOR L599 (Cognitive Complexity) ---
+# --- START: REFACTOR FOR L568 (Cognitive Complexity) ---
 #
 # Reason: The old _validate_staff_update was 17 complexity.
 # We break it into 5 small functions, each with a complexity of ~3-5.
@@ -800,7 +797,7 @@ def update_user(current_user, user_id):
     
     updated_user = user_collection.find_one({"_id": ObjectId(user_id)})
     return jsonify(serialize_user(updated_user, include_email=True)), 200
-# --- END: REFACTOR FOR L599 ---
+# --- END: REFACTOR FOR L568 ---
 
 
 # --- START: REFACTOR FOR L751 (Cognitive Complexity) ---
