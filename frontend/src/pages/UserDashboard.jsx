@@ -136,9 +136,7 @@ function FilterMenu({
   );
 }
 
-// --- START: REFACTOR FOR L393 (Cognitive Complexity) ---
-//
-// 1. Create a new component for the complex "expanded row" content
+// --- ExpandedRowContent Component (Extracted to reduce complexity) ---
 function ExpandedRowContent({ 
   user, 
   isAdmin, 
@@ -212,7 +210,7 @@ function ExpandedRowContent({
   );
 }
 
-// 2. Simplify the original UserRow component
+// --- UserRow Component (Extracted to reduce complexity) ---
 function UserRow({
   user,
   isAdmin,
@@ -301,13 +299,9 @@ function UserRow({
     </React.Fragment>
   );
 }
-// --- END: REFACTOR FOR L393 (Step 1/2) ---
 
 
-// --- START: REFACTOR FOR L393 (Step 2/2) ---
-//
-// 3. Create helper functions for the most complex logic (save handlers)
-//    These live *outside* the UserDashboard component.
+// --- START: REFACTOR FOR L393 (Cognitive Complexity) ---
 
 /**
  * Handles the logic for saving a staff member (create or update).
@@ -388,9 +382,8 @@ async function _executeSaveUser(
   }
 }
 
-
-// 4. The main component is now much simpler.
-export function UserDashboard({ token, onLogout, currentUser }) {
+// 2. Create a new custom hook to hold ALL state and logic
+function useUserDashboardState(token, currentUser) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -520,7 +513,6 @@ export function UserDashboard({ token, onLogout, currentUser }) {
     setStartDate('');
     setEndDate('');
     setCurrentPage(1); 
-    // fetchUsers will be called by the useEffect hook due to state changes
   };
 
   const handleClearFilters = () => {
@@ -537,7 +529,18 @@ export function UserDashboard({ token, onLogout, currentUser }) {
     }
   };
   
-  // --- Complex handlers are now simple calls to the outside functions ---
+  const closeStaffModal = () => {
+    setIsStaffModalOpen(false);
+    setEditingStaff(null);
+    setStaffModalMessage({ type: '', text: '' });
+  };
+  
+  const closeUserModal = () => {
+    setIsUserModalOpen(false);
+    setEditingUser(null);
+    setUserModalError(null);
+  };
+
   const handleSaveStaff = (formData, profilePicFile) => {
     _executeSaveStaff(
       formData, token, editingStaff, 
@@ -554,7 +557,6 @@ export function UserDashboard({ token, onLogout, currentUser }) {
     );
   };
 
-
   const handleDeleteUser = async (id) => {
     if (window.confirm('Are you sure you want to delete this user? This will also delete all their uploaded files and profile picture.')) {
       try {
@@ -570,18 +572,6 @@ export function UserDashboard({ token, onLogout, currentUser }) {
     setStaffModalMessage({ type: '', text: '' });
     setEditingStaff(initialStaffData);
     setIsStaffModalOpen(true);
-  };
-  
-  const closeStaffModal = () => {
-    setIsStaffModalOpen(false);
-    setEditingStaff(null);
-    setStaffModalMessage({ type: '', text: '' });
-  };
-  
-  const closeUserModal = () => {
-    setIsUserModalOpen(false);
-    setEditingUser(null);
-    setUserModalError(null);
   };
   
   const handleRowClick = (userId) => {
@@ -634,16 +624,6 @@ export function UserDashboard({ token, onLogout, currentUser }) {
     }
   };
   
-  const getFullImageUrl = (url) => {
-    if (!url) {
-      return "https://placehold.co/150x150/E2D9FF/6842FF?text=U";
-    }
-    if (url.startsWith('http') || url.startsWith('blob:')) {
-      return url;
-    }
-    return `${api.baseUrl}${url}`;
-  };
-
   const handleEditClick = (user) => {
     if (user.role === 'user') {
       setUserModalError(null);
@@ -655,6 +635,73 @@ export function UserDashboard({ token, onLogout, currentUser }) {
       setIsStaffModalOpen(true);
     }
   };
+
+  // Return all state and handlers for the component to use
+  return {
+    users, loading, error, 
+    isStaffModalOpen, staffModalMessage, editingStaff,
+    isUserModalOpen, userModalError, editingUser,
+    expandedRowId, adminAddFileRef, currentUserIdForUpload, fileManagementError,
+    currentPage, totalPages,
+    searchTerm, sortBy, sortOrder, 
+    selectedRoles, startDate, endDate, isFilterMenuOpen, filterMenuRef,
+    selectedAccountTypes, selectedSensitivity,
+    isAdmin, initialUserData, initialStaffData,
+    
+    // Setters
+    setSearchTerm, setCurrentPage, setStartDate, setEndDate, setIsFilterMenuOpen,
+    // --- FIX 1/2: Return the setters from the hook ---
+    setUserModalError, setEditingUser, setIsUserModalOpen,
+
+    // Handlers
+    handleSort, handleRoleChange, handleAccountTypeChange, handleSensitivityChange,
+    handleClearFilters, handleDownload, handleSaveStaff, handleSaveUser,
+    handleDeleteUser, handleCreateStaff, closeStaffModal, closeUserModal,
+    handleRowClick, handleAdminFileAddClick, handleAdminFileUpload,
+    handleAdminFileDelete, handleEditClick
+  };
+}
+
+// Utility function (can live outside)
+function getFullImageUrl(url) {
+  if (!url) {
+    return "https://placehold.co/150x150/E2D9FF/6842FF?text=U";
+  }
+  if (url.startsWith('http') || url.startsWith('blob:')) {
+    return url;
+  }
+  // Use api.baseUrl which is globally available from the import
+  return `${api.baseUrl}${url}`;
+}
+
+
+// --- View 4: UserDashboard (This is now simple) ---
+export function UserDashboard({ token, onLogout, currentUser }) {
+  
+  // Call the custom hook to get all state and logic
+  const {
+    users, loading, error, 
+    isStaffModalOpen, staffModalMessage, editingStaff,
+    isUserModalOpen, userModalError, editingUser,
+    expandedRowId, adminAddFileRef, fileManagementError,
+    currentPage, totalPages,
+    searchTerm, sortBy, sortOrder, 
+    selectedRoles, startDate, endDate, isFilterMenuOpen, filterMenuRef,
+    selectedAccountTypes, selectedSensitivity,
+    isAdmin, initialUserData, initialStaffData,
+    
+    // Setters
+    setSearchTerm, setCurrentPage, setStartDate, setEndDate, setIsFilterMenuOpen,
+    // --- FIX 2/2: Destructure the setters for use ---
+    setUserModalError, setEditingUser, setIsUserModalOpen,
+
+    // Handlers
+    handleSort, handleRoleChange, handleAccountTypeChange, handleSensitivityChange,
+    handleClearFilters, handleDownload, handleSaveStaff, handleSaveUser,
+    handleDeleteUser, handleCreateStaff, closeStaffModal, closeUserModal,
+    handleRowClick, handleAdminFileAddClick, handleAdminFileUpload,
+    handleAdminFileDelete, handleEditClick
+  } = useUserDashboardState(token, currentUser);
 
   return (
     <div className="w-full max-w-6xl mx-auto p-4">

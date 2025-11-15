@@ -1,6 +1,7 @@
 import time
 from flask import Flask, request, jsonify, send_file, redirect
 from flask_cors import CORS
+# --- FIX: Added timezone to the import ---
 from datetime import datetime as dt, timedelta, timezone 
 import jwt
 from functools import wraps
@@ -704,7 +705,7 @@ def create_user(current_user):
     return jsonify(serialize_user(new_user, include_email=True)), 201
 
 
-# --- START: REFACTOR FOR L568 (Cognitive Complexity) ---
+# --- START: REFACTOR FOR L565 (Cognitive Complexity) ---
 #
 # Reason: The old _validate_staff_update was 17 complexity.
 # We break it into 5 small functions, each with a complexity of ~3-5.
@@ -797,7 +798,7 @@ def update_user(current_user, user_id):
     
     updated_user = user_collection.find_one({"_id": ObjectId(user_id)})
     return jsonify(serialize_user(updated_user, include_email=True)), 200
-# --- END: REFACTOR FOR L568 ---
+# --- END: REFACTOR FOR L565 ---
 
 
 # --- START: REFACTOR FOR L751 (Cognitive Complexity) ---
