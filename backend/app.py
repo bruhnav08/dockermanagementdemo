@@ -1,7 +1,8 @@
 import time
 from flask import Flask, request, jsonify, send_file, redirect
 from flask_cors import CORS
-from datetime import datetime as dt, timedelta
+# --- FIX: Added timezone to the import ---
+from datetime import datetime as dt, timedelta, timezone 
 import jwt
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -19,6 +20,14 @@ from bson import ObjectId
 app = Flask(__name__)
 CORS(app)  # This enables Cross-Origin Resource Sharing
 app.config['SECRET_KEY'] = 'your-super-secret-key-that-should-be-in-an-env-file'
+
+# --- FIX (Issues 2, 3, 8, 11): Added constants to fix duplicated literals ---
+#
+ERROR_MSG_18_PLUS = "User must be at least 18 years old."
+ERROR_MSG_EMAIL_EXISTS = "This email address is already registered."
+ERROR_MSG_ADMIN_REQUIRED = "Admin access required"
+ERROR_MSG_USER_NOT_FOUND = "User not found"
+# --- End of Constants ---
 
 # --- MongoDB Connection ---
 try:
@@ -45,7 +54,6 @@ def serialize_user(user, include_email=True):
         "id": str(user['_id']),
         "name": user.get('name'),
         "role": user.get('role'),
-        # --- THIS IS THE FIX from last time ---
         "account_type": "management" if user.get('role') in ['admin', 'employee'] else user.get('account_type', 'personal'),
         "needs_sensitive_storage": user.get('needs_sensitive_storage', False),
         "created_date": user.get('created_date', '').isoformat() if user.get('created_date') else None,
@@ -74,7 +82,8 @@ def is_over_18(date_string):
         return True 
     try:
         dob = dt.strptime(date_string, '%Y-%m-%d').date()
-        eighteen_years_ago = dt.now().date() - timedelta(days=18*365.25)
+        # --- FIX (Issue 15): Use timezone-aware datetime ---
+        eighteen_years_ago = dt.now(timezone.utc).date() - timedelta(days=18*365.25)
         return dob <= eighteen_years_ago
     except ValueError:
         return False
@@ -84,6 +93,11 @@ def is_over_18(date_string):
 EMAIL_REGEX = r'^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$'
 ACCOUNT_TYPES = ['personal', 'professional', 'academic'] 
 
+# --- FIX (Issue 1): Refactored to reduce Cognitive Complexity from 21 ---
+#
+# Reason: The original function had complex nested if/elif statements for create vs. update.
+# This refactor flattens the logic by checking for the *condition* to validate (e.g., is_create or 'name' in data)
+# first, then running the validation. This reduces branching and complexity.
 def validate_user_data(data, is_create=True, check_password=True):
     """Validates user data for creation or updates. Returns a list of error messages."""
     errors = []
@@ -93,28 +107,30 @@ def validate_user_data(data, is_create=True, check_password=True):
     password = data.get('password')
     account_type = data.get('account_type')
 
-    if is_create and (not name or len(name) < 2):
-        errors.append("Name must be at least 2 characters long.")
-    elif 'name' in data and (not name or len(name) < 2):
-         errors.append("Name must be at least 2 characters long.")
+    # Validate Name
+    if is_create or 'name' in data:
+        if not name or len(name) < 2:
+            errors.append("Name must be at least 2 characters long.")
     
-    if is_create and (not email or not re.match(EMAIL_REGEX, email.lower())):
-        errors.append("Please provide a valid email address.")
-    elif 'email' in data and (not email or not re.match(EMAIL_REGEX, email.lower())):
-         errors.append("Please provide a valid email address.")
+    # Validate Email
+    if is_create or 'email' in data:
+        if not email or not re.match(EMAIL_REGEX, email.lower()):
+            errors.append("Please provide a valid email address.")
     
+    # Validate Password
     if check_password:
-        if is_create and (not password or len(password) < 6):
-            errors.append("Password must be at least 6 characters long.")
-        elif not is_create and 'password' in data and password and len(password) < 6:
-             errors.append("New password must be at least 6 characters long.")
+        if is_create:
+            if not password or len(password) < 6:
+                errors.append("Password must be at least 6 characters long.")
+        elif 'password' in data and password and len(password) < 6:
+            errors.append("New password must be at least 6 characters long.")
              
+    # Validate Account Type
     if 'account_type' in data and account_type not in ACCOUNT_TYPES:
-        # This check is for 'user' roles.
         errors.append("Invalid account type selected.")
 
     return errors
-# --- End of Helper ---
+# --- End of Refactor ---
 
 
 # --- Role-Based Security Helpers ---
@@ -171,10 +187,12 @@ def register():
     errors = validate_user_data(data, is_create=True, check_password=True)
     
     if selected_date and not is_over_18(selected_date):
-        errors.append("User must be at least 18 years old.")
+        # --- FIX (Issue 2): Use constant ---
+        errors.append(ERROR_MSG_18_PLUS)
         
     if user_collection.find_one({"email": email}):
-        errors.append("This email address is already registered.")
+        # --- FIX (Issue 3): Use constant ---
+        errors.append(ERROR_MSG_EMAIL_EXISTS)
     
     if errors:
         return jsonify({"message": "\n".join(errors)}), 400
@@ -210,7 +228,8 @@ def register():
         "role": "user", 
         "account_type": data.get('account_type', 'personal'),
         "needs_sensitive_storage": data.get('needs_sensitive_storage') == 'true',
-        "created_date": dt.utcnow(),
+        # --- FIX (Issue 4): Use timezone-aware datetime ---
+        "created_date": dt.now(timezone.utc),
         "profile_pic_id": profile_pic_id,
         "selected_date": selected_date,
         "agreed_to_terms": data.get('agreed_to_terms') == 'true',
@@ -224,7 +243,8 @@ def register():
     token = jwt.encode(
         {
             'user_id': new_user_id,
-            'exp': dt.utcnow() + timedelta(hours=24)
+            # --- FIX (Issue 5): Use timezone-aware datetime ---
+            'exp': dt.now(timezone.utc) + timedelta(hours=24)
         },
         app.config['SECRET_KEY'],
         algorithm="HS256"
@@ -247,9 +267,11 @@ def login():
         user_role = user.get('role', 'user').lower()
         
         if user_role in ['admin', 'employee']:
-            expires = dt.utcnow() + timedelta(hours=1)
+            # --- FIX (Issue 6): Use timezone-aware datetime ---
+            expires = dt.now(timezone.utc) + timedelta(hours=1)
         else:
-            expires = dt.utcnow() + timedelta(hours=24)
+            # --- FIX (Issue 7): Use timezone-aware datetime ---
+            expires = dt.now(timezone.utc) + timedelta(hours=24)
         
         token = jwt.encode(
             {
@@ -412,7 +434,8 @@ def update_my_profile_pic(current_user):
 @token_required
 def admin_create_user(current_user):
     if not is_admin(current_user):
-        return jsonify({"message": "Admin access required"}), 403
+        # --- FIX (Issue 8): Use constant ---
+        return jsonify({"message": ERROR_MSG_ADMIN_REQUIRED}), 403
 
     data = request.form
     email = data.get('email', '').lower()
@@ -421,10 +444,12 @@ def admin_create_user(current_user):
     errors = validate_user_data(data, is_create=True, check_password=True)
     
     if selected_date and not is_over_18(selected_date):
-        errors.append("User must be at least 18 years old.")
+        # --- FIX (Issue 2): Use constant ---
+        errors.append(ERROR_MSG_18_PLUS)
         
     if user_collection.find_one({"email": email}):
-        errors.append("This email address is already registered.")
+        # --- FIX (Issue 3): Use constant ---
+        errors.append(ERROR_MSG_EMAIL_EXISTS)
     
     if errors:
         return jsonify({"message": "\n".join(errors)}), 400
@@ -448,7 +473,8 @@ def admin_create_user(current_user):
         "role": "user", 
         "account_type": data.get('account_type', 'personal'),
         "needs_sensitive_storage": data.get('needs_sensitive_storage') == 'true',
-        "created_date": dt.utcnow(),
+        # --- FIX (Issue 9): Use timezone-aware datetime ---
+        "created_date": dt.now(timezone.utc),
         "profile_pic_id": profile_pic_id,
         "selected_date": selected_date,
         "gallery": []
@@ -460,99 +486,119 @@ def admin_create_user(current_user):
     return jsonify(serialize_user(new_user, include_email=True)), 201
 
 
+# --- FIX (Issue 12): Refactored admin_update_user to reduce Cognitive Complexity from 20 ---
+#
+# Reason: The original function was very large, with all validation, update logic,
+# and file handling in one block.
+# This refactor extracts logic into smaller, single-responsibility helper functions
+# and uses "return early" to avoid deep nesting.
+
+def _validate_admin_user_update(data, user_to_update):
+    """Helper to validate admin updates for a user."""
+    errors = validate_user_data(data, is_create=False, check_password=True)
+    user_id = str(user_to_update['_id'])
+    
+    selected_date = data.get('selected_date')
+    if selected_date and not is_over_18(selected_date):
+        # --- FIX (Issue 2): Use constant ---
+        errors.append(ERROR_MSG_18_PLUS)
+
+    email = data.get('email', '').lower()
+    if email and email != user_to_update.get('email'):
+        existing_user = user_collection.find_one({"email": email})
+        if existing_user and str(existing_user['_id']) != user_id:
+            # --- FIX (Issue 3): Use constant ---
+            errors.append(ERROR_MSG_EMAIL_EXISTS)
+    
+    if data.get('account_type') == 'management':
+        errors.append("Cannot assign 'management' account type to a 'user' role.")
+        
+    return errors
+
+def _build_admin_user_updates(data):
+    """Helper to build the $set dictionary for user updates."""
+    updates = {
+        "name": data.get('name'),
+        "selected_date": data.get('selected_date'),
+        "email": data.get('email', '').lower(),
+        "account_type": data.get('account_type'),
+        "needs_sensitive_storage": data.get('needs_sensitive_storage') == 'true',
+    }
+    # Remove keys that were not provided
+    updates = {k: v for k, v in updates.items() if v is not None}
+    
+    if data.get('password'):
+        updates['password_hash'] = generate_password_hash(data['password'])
+    
+    return updates
+
+def _handle_admin_profile_pic_update(file, user_to_update):
+    """Helper to delete old pic and save new one."""
+    if user_to_update.get('profile_pic_id'):
+        try:
+            fs.delete(ObjectId(user_to_update['profile_pic_id']))
+        except Exception as e:
+            print(f"Old pic not found: {e}")
+    
+    filename = secure_filename(file.filename)
+    file_id = fs.put(file, filename=filename, content_type=file.mimetype)
+    return str(file_id)
+
 @app.route('/admin/update-user/<string:user_id>', methods=['POST'])
 @token_required
 def admin_update_user(current_user, user_id):
     if not is_admin(current_user):
-        return jsonify({"message": "Admin access required"}), 403
+        # --- FIX (Issue 8): Use constant ---
+        return jsonify({"message": ERROR_MSG_ADMIN_REQUIRED}), 403
     
     try:
         user_to_update = user_collection.find_one({"_id": ObjectId(user_id)})
-        if not user_to_update:
-            return jsonify({"message": "User not found"}), 404
+    except Exception:
+        # --- FIX (Issue 11): Use constant ---
+        return jsonify({"message": ERROR_MSG_USER_NOT_FOUND}), 404
+
+    if not user_to_update:
+        # --- FIX (Issue 11): Use constant ---
+        return jsonify({"message": ERROR_MSG_USER_NOT_FOUND}), 404
         
-        if user_to_update.get('role') != 'user':
-            return jsonify({"message": "This endpoint is only for editing 'user' roles"}), 400
+    if user_to_update.get('role') != 'user':
+        return jsonify({"message": "This endpoint is only for editing 'user' roles"}), 400
 
-        data = request.form
-        email = data.get('email', '').lower()
-        selected_date = data.get('selected_date')
-        account_type = data.get('account_type')
+    data = request.form
+    errors = _validate_admin_user_update(data, user_to_update)
+    if errors:
+        return jsonify({"message": "\n".join(errors)}), 400
 
-        errors = validate_user_data(data, is_create=False, check_password=True)
+    updates = _build_admin_user_updates(data)
 
-        if selected_date and not is_over_18(selected_date):
-            errors.append("User must be at least 18 years old.")
+    if 'profile_pic' in request.files:
+        file = request.files['profile_pic']
+        if file.filename != '':
+            updates['profile_pic_id'] = _handle_admin_profile_pic_update(file, user_to_update)
 
-        if email and email != user_to_update.get('email'):
-            existing_user = user_collection.find_one({"email": email})
-            if existing_user and str(existing_user['_id']) != user_id:
-                errors.append("This email address is already registered by another user.")
-        
-        if account_type == 'management':
-            errors.append("Cannot assign 'management' account type to a 'user' role.")
-            
-        if errors:
-            return jsonify({"message": "\n".join(errors)}), 400
-
-        updates = {
-            "name": data.get('name'),
-            "selected_date": selected_date,
-            "email": email,
-            "account_type": account_type,
-            "needs_sensitive_storage": data.get('needs_sensitive_storage') == 'true',
-        }
-        
-        updates = {k: v for k, v in updates.items() if v is not None}
-        
-        if data.get('password'):
-            updates['password_hash'] = generate_password_hash(data['password'])
-
-        if 'profile_pic' in request.files:
-            file = request.files['profile_pic']
-            if file.filename != '':
-                if user_to_update.get('profile_pic_id'):
-                    try:
-                        fs.delete(ObjectId(user_to_update['profile_pic_id']))
-                    except Exception as e:
-                        print(f"Old pic not found: {e}")
-                
-                filename = secure_filename(file.filename)
-                file_id = fs.put(file, filename=filename, content_type=file.mimetype)
-                updates['profile_pic_id'] = str(file_id)
-
-        if updates:
-             user_collection.update_one({"_id": ObjectId(user_id)}, {"$set": updates})
-             
-        updated_user = user_collection.find_one({"_id": ObjectId(user_id)})
-        return jsonify(serialize_user(updated_user, include_email=True)), 200
-    
-    except Exception as e:
-        print(f"Error updating user: {e}")
-        return jsonify({"message": "Invalid User ID or update error"}), 400
+    if updates:
+         user_collection.update_one({"_id": ObjectId(user_id)}, {"$set": updates})
+         
+    updated_user = user_collection.find_one({"_id": ObjectId(user_id)})
+    return jsonify(serialize_user(updated_user, include_email=True)), 200
+# --- End of Refactor ---
 
 
 # --- Admin/Dashboard Routes ---
 
-@app.route('/users', methods=['GET'])
-@token_required
-def get_users(current_user):
-    if not is_employee_or_admin(current_user):
-        return jsonify({"message": "Dashboard access required"}), 403
-        
-    page = int(request.args.get('page', 1))
-    limit = int(request.args.get('limit', 10))
-    search = request.args.get('search', '').lower()
-    sort_by = request.args.get('sort_by', 'name')
-    sort_order_str = request.args.get('sort_order', 'asc')
-    
-    roles_str = request.args.get('roles', '')
-    start_date_str = request.args.get('start_date', '')
-    end_date_str = request.args.get('end_date', '')
-    account_types_str = request.args.get('account_types', '')
-    sensitivity_str = request.args.get('sensitivity', '')
-    
-    sort_order = ASCENDING if sort_order_str == 'asc' else DESCENDING
+# --- FIX (Issue 10): Refactored get_users to reduce Cognitive Complexity from 25 ---
+#
+# Reason: The original function was building a complex dictionary (query) and
+# handling pagination, sorting, and data fetching all in one.
+# This refactor extracts the query-building logic into a separate, focused helper function.
+def _build_user_query(args):
+    """Helper function to build the MongoDB query from request args."""
+    search = args.get('search', '').lower()
+    roles_str = args.get('roles', '')
+    start_date_str = args.get('start_date', '')
+    end_date_str = args.get('end_date', '')
+    account_types_str = args.get('account_types', '')
+    sensitivity_str = args.get('sensitivity', '')
     
     query_filters = []
     
@@ -595,10 +641,22 @@ def get_users(current_user):
     if date_query:
         query_filters.append({"created_date": date_query})
 
-    if query_filters:
-        query = {"$and": query_filters}
-    else:
-        query = {}
+    return {"$and": query_filters} if query_filters else {}
+
+@app.route('/users', methods=['GET'])
+@token_required
+def get_users(current_user):
+    if not is_employee_or_admin(current_user):
+        return jsonify({"message": "Dashboard access required"}), 403
+        
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 10))
+    sort_by = request.args.get('sort_by', 'name')
+    sort_order_str = request.args.get('sort_order', 'asc')
+    sort_order = ASCENDING if sort_order_str == 'asc' else DESCENDING
+    
+    # Build query using the helper
+    query = _build_user_query(request.args)
         
     total_users = user_collection.count_documents(query)
     total_pages = (total_users + limit - 1) // limit
@@ -617,6 +675,7 @@ def get_users(current_user):
         "total_users": total_users,
         "total_pages": total_pages
     })
+# --- End of Refactor ---
 
 @app.route('/users/<string:user_id>', methods=['GET'])
 @token_required
@@ -628,7 +687,8 @@ def get_user(current_user, user_id):
         user = user_collection.find_one({"_id": ObjectId(user_id)})
         if user:
             return jsonify(serialize_user(user, include_email=True)), 200
-        return jsonify({"message": "User not found"}), 404
+        # --- FIX (Issue 11): Use constant ---
+        return jsonify({"message": ERROR_MSG_USER_NOT_FOUND}), 404
     except Exception:
         return jsonify({"message": "Invalid User ID"}), 400
 
@@ -636,7 +696,8 @@ def get_user(current_user, user_id):
 @token_required
 def create_user(current_user):
     if not is_admin(current_user):
-        return jsonify({"message": "Admin access required"}), 403
+        # --- FIX (Issue 8): Use constant ---
+        return jsonify({"message": ERROR_MSG_ADMIN_REQUIRED}), 403
         
     data = request.json
     email = data.get('email', '').lower()
@@ -649,10 +710,12 @@ def create_user(current_user):
         errors.append("New staff role must be 'admin' or 'employee'.")
         
     if selected_date and not is_over_18(selected_date):
-        errors.append("User must be at least 18 years old.")
+        # --- FIX (Issue 2): Use constant ---
+        errors.append(ERROR_MSG_18_PLUS)
 
     if user_collection.find_one({"email": email}):
-        errors.append("This email address is already registered.")
+        # --- FIX (Issue 3): Use constant ---
+        errors.append(ERROR_MSG_EMAIL_EXISTS)
         
     if errors:
         return jsonify({"message": "\n".join(errors)}), 400
@@ -666,7 +729,8 @@ def create_user(current_user):
         "email": email,
         "password_hash": password_hash,
         "role": role,
-        "created_date": dt.utcnow(),
+        # --- FIX (Issue 13): Use timezone-aware datetime ---
+        "created_date": dt.now(timezone.utc),
         "selected_date": selected_date,
         "account_type": "management"
     }
@@ -675,83 +739,97 @@ def create_user(current_user):
     
     return jsonify(serialize_user(new_user, include_email=True)), 201
 
+# --- FIX (Issue 14): Refactored update_user to reduce Cognitive Complexity from 17 ---
+#
+# Reason: Similar to admin_update_user, this function had all validation
+# and update logic in one block.
+# This refactor extracts validation to a helper and uses "return early".
+
+def _validate_staff_update(data, user_to_update):
+    """Helper to validate admin updates for a staff member."""
+    errors = validate_user_data(data, is_create=False, check_password=True)
+    user_id = str(user_to_update['_id'])
+
+    role = data.get('role')
+    if role and role not in ['admin', 'employee']:
+         errors.append("Role can only be 'admin' or 'employee'.")
+
+    selected_date = data.get('selected_date')
+    if selected_date and not is_over_18(selected_date):
+        # --- FIX (Issue 2): Use constant ---
+        errors.append(ERROR_MSG_18_PLUS)
+
+    email = data.get('email', '').lower()
+    if email and email != user_to_update.get('email'):
+        existing_user = user_collection.find_one({"email": email})
+        if existing_user and str(existing_user['_id']) != user_id:
+            errors.append("This email address is already registered by another user.")
+    
+    return errors
+
 @app.route('/users/<string:user_id>', methods=['PUT'])
 @token_required
 def update_user(current_user, user_id):
     if not is_admin(current_user):
-        return jsonify({"message": "Admin access required"}), 403
+        # --- FIX (Issue 8): Use constant ---
+        return jsonify({"message": ERROR_MSG_ADMIN_REQUIRED}), 403
 
     try:
         user_to_update = user_collection.find_one({"_id": ObjectId(user_id)})
-        if not user_to_update:
-            return jsonify({"message": "User not found"}), 404
+    except Exception:
+         return jsonify({"message": "Invalid User ID"}), 400
+
+    if not user_to_update:
+        # --- FIX (Issue 11): Use constant ---
+        return jsonify({"message": ERROR_MSG_USER_NOT_FOUND}), 404
             
-        if user_to_update.get('role') not in ['admin', 'employee']:
-            return jsonify({"message": "This route is only for updating staff roles"}), 400
+    if user_to_update.get('role') not in ['admin', 'employee']:
+        return jsonify({"message": "This route is only for updating staff roles"}), 400
             
-        data = request.json
-        
-        # --- *** THIS IS THE FIX *** ---
-        # Remove user-specific fields from the data before validation.
-        # This prevents "Invalid account type" error when 'management' is sent.
-        data.pop('account_type', None) 
-        data.pop('needs_sensitive_storage', None)
-        # --- *** END OF FIX *** ---
+    data = request.json
+    
+    # Remove user-specific fields before validation
+    data.pop('account_type', None) 
+    data.pop('needs_sensitive_storage', None)
 
-        email = data.get('email', '').lower()
-        selected_date = data.get('selected_date')
-        role = data.get('role')
+    errors = _validate_staff_update(data, user_to_update)
+    if errors:
+        return jsonify({"message": "\n".join(errors)}), 400
 
-        errors = validate_user_data(data, is_create=False, check_password=True)
+    updates = {
+        "name": data.get('name'),
+        "role": data.get('role'),
+        "selected_date": data.get('selected_date'),
+        "email": data.get('email', '').lower()
+    }
+    
+    updates = {k: v for k, v in updates.items() if v} 
+    
+    if 'password' in data and data['password']:
+        updates['password_hash'] = generate_password_hash(data['password'])
 
-        if role and role not in ['admin', 'employee']:
-             errors.append("Role can only be 'admin' or 'employee'.")
-
-        if selected_date and not is_over_18(selected_date):
-            errors.append("User must be at least 18 years old.")
-
-        if email and email != user_to_update.get('email'):
-            existing_user = user_collection.find_one({"email": email})
-            if existing_user and str(existing_user['_id']) != user_id:
-                errors.append("This email address is already registered by another user.")
-        
-        if errors:
-            return jsonify({"message": "\n".join(errors)}), 400
-
-        updates = {
-            "name": data.get('name'),
-            "role": role,
-            "selected_date": selected_date,
-            "email": email
-        }
-        
-        updates = {k: v for k, v in updates.items() if v} 
-        
-        if 'password' in data and data['password']:
-            updates['password_hash'] = generate_password_hash(data['password'])
-
-        if updates:
-            result = user_collection.update_one(
-                {"_id": ObjectId(user_id)},
-                {"$set": updates}
-            )
-        
-        updated_user = user_collection.find_one({"_id": ObjectId(user_id)})
-        return jsonify(serialize_user(updated_user, include_email=True)), 200
-    except Exception as e:
-        print(f"Error updating user: {e}")
-        return jsonify({"message": "Invalid User ID or update error"}), 400
+    if updates:
+        user_collection.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": updates}
+        )
+    
+    updated_user = user_collection.find_one({"_id": ObjectId(user_id)})
+    return jsonify(serialize_user(updated_user, include_email=True)), 200
+# --- End of Refactor ---
 
 @app.route('/users/<string:user_id>', methods=['DELETE'])
 @token_required
 def delete_user(current_user, user_id):
     if not is_admin(current_user):
-        return jsonify({"message": "Admin access required"}), 403
+        # --- FIX (Issue 8): Use constant ---
+        return jsonify({"message": ERROR_MSG_ADMIN_REQUIRED}), 403
         
     try:
         user_to_delete = user_collection.find_one({"_id": ObjectId(user_id)})
         if not user_to_delete:
-            return jsonify({"message": "User not found"}), 404
+            # --- FIX (Issue 11): Use constant ---
+            return jsonify({"message": ERROR_MSG_USER_NOT_FOUND}), 404
 
         if user_to_delete.get('role') == 'user' and 'gallery' in user_to_delete:
             print(f"User {user_id} is a 'user'. Deleting their {len(user_to_delete['gallery'])} files...")
@@ -781,7 +859,8 @@ def delete_user(current_user, user_id):
 @token_required
 def admin_add_file_to_user(current_user, user_id):
     if not is_admin(current_user):
-        return jsonify({"message": "Admin access required"}), 403
+        # --- FIX (Issue 8): Use constant ---
+        return jsonify({"message": ERROR_MSG_ADMIN_REQUIRED}), 403
         
     user = user_collection.find_one({"_id": ObjectId(user_id)})
     if not user or user.get('role') != 'user':
@@ -812,7 +891,8 @@ def admin_add_file_to_user(current_user, user_id):
 @token_required
 def admin_delete_file(current_user, file_id):
     if not is_admin(current_user):
-        return jsonify({"message": "Admin access required"}), 403
+        # --- FIX (Issue 8): Use constant ---
+        return jsonify({"message": ERROR_MSG_ADMIN_REQUIRED}), 403
         
     try:
         user = user_collection.find_one({"gallery.id": file_id})

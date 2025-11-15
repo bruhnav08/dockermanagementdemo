@@ -22,10 +22,266 @@ function useClickOutside(ref, handler) {
 }
 
 const ALL_ROLES = ['admin', 'employee', 'user'];
-// --- *** THIS IS THE FIX: Add 'management' to the filter list *** ---
 const ALL_ACCOUNT_TYPES = ['personal', 'professional', 'academic', 'management'];
 
-// --- View 4: UserDashboard (for 'admin' and 'employee') ---
+
+// --- FIX (Issue 18): Extracted FilterMenu component to reduce complexity ---
+//
+function FilterMenu({
+  isOpen,
+  selectedRoles,
+  onRoleChange,
+  selectedAccountTypes,
+  onAccountTypeChange,
+  selectedSensitivity,
+  onSensitivityChange,
+  startDate,
+  onStartDateChange,
+  endDate,
+  onEndDateChange,
+  onClearFilters
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="absolute z-10 top-12 right-0 w-80 p-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl space-y-4">
+      {/* Roles Section */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Role</label>
+        <div className="flex flex-col mt-2 space-y-1">
+          {ALL_ROLES.map(role => (
+            <label key={role} className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedRoles.includes(role)}
+                onChange={() => onRoleChange(role)}
+                className="h-4 w-4 text-indigo-600 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-400"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300 capitalize">{role}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+      
+      {/* Account Type Section */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Account Type</label>
+        <div className="flex flex-col mt-2 space-y-1">
+          {ALL_ACCOUNT_TYPES.map(type => (
+            <label key={type} className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedAccountTypes.includes(type)}
+                onChange={() => onAccountTypeChange(type)}
+                className="h-4 w-4 text-indigo-600 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-400"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300 capitalize">{type}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+      
+      {/* Sensitive Storage Section */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Storage Needs</label>
+        <div className="flex flex-col mt-2 space-y-1">
+          {[
+            { label: 'All', value: 'all' },
+            { label: 'Yes (Sensitive)', value: 'true' },
+            { label: 'No (Standard)', value: 'false' }
+          ].map(item => (
+            <label key={item.value} className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="radio"
+                name="sensitivity-filter"
+                value={item.value}
+                checked={selectedSensitivity === item.value}
+                onChange={() => onSensitivityChange(item.value)}
+                className="h-4 w-4 text-indigo-600 border-gray-300 rounded-full dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-400"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">{item.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Date Range Section */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Date Joined</label>
+        <div className="mt-2 space-y-2">
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => onStartDateChange(e.target.value)}
+            className="w-full px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            placeholder="From"
+          />
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => onEndDateChange(e.target.value)}
+            min={startDate}
+            className="w-full px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            placeholder="To"
+          />
+        </div>
+      </div>
+      
+      <button
+        onClick={onClearFilters}
+        className="w-full text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+      >
+        Clear All Filters
+      </button>
+    </div>
+  );
+}
+
+// --- FIX (Issue 18): Extracted UserRow component to reduce complexity ---
+//
+function UserRow({
+  user,
+  isAdmin,
+  isExpanded,
+  onRowClick,
+  getFullImageUrl,
+  onEditClick,
+  onDeleteClick,
+  fileManagementError,
+  onFileAddClick,
+  onFileDownload,
+  onFileDelete
+}) {
+  return (
+    <React.Fragment>
+      <tr 
+        className="hover:bg-gray-50 dark:hover:bg-gray-700"
+      >
+        <td className="p-3 whitespace-nowrap" onClick={() => onRowClick(user.id)} style={{ cursor: 'pointer' }}>
+           <div className="flex items-center">
+              <img 
+                src={getFullImageUrl(user.profile_pic)} 
+                alt={user.name} 
+                className="w-10 h-10 rounded-full mr-3 object-cover"
+                onError={(e) => { 
+                  const initials = user.name ? user.name[0].toUpperCase() : 'U';
+                  e.target.src = `https://placehold.co/150x150/E2D9FF/6842FF?text=${initials}`;
+                }}
+              />
+              <span className="font-medium text-gray-900 dark:text-white">{user.name}</span>
+           </div>
+        </td>
+        <td className="p-3 text-sm text-gray-700 dark:text-gray-300">{user.email || 'N/A'}</td>
+        <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
+          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+            user.role === 'admin' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+            user.role === 'employee' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+            'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+          }`}>
+            {user.role}
+          </span>
+        </td>
+        <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
+          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full capitalize ${
+            user.account_type === 'management' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200' :
+            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+          }`}>
+            {user.account_type || 'N/A'}
+          </span>
+        </td>
+        <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
+          <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+            {user.gallery ? user.gallery.length : 0}
+          </span>
+        </td>
+        <td className="p-3 text-sm text-gray-700 dark:text-gray-300">{user.created_date ? new Date(user.created_date).toLocaleDateString() : 'N/A'}</td>
+        {isAdmin && (
+          <td className="p-3 text-sm font-medium">
+            <button 
+              onClick={(e) => { e.stopPropagation(); onEditClick(user); }} 
+              className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-200 mr-3"
+            >
+              Edit
+            </button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDeleteClick(user.id); }} 
+              className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-200"
+            >
+              Delete
+            </button>
+          </td>
+        )}
+      </tr>
+      
+      {isExpanded && (
+        <tr className="bg-gray-50 dark:bg-gray-700">
+          <td colSpan={isAdmin ? 7 : 6} className="p-4">
+            <div className="flex justify-between">
+              <div className="text-sm text-gray-700 dark:text-gray-300">
+                <span className="font-semibold">Sensitive Storage Request: </span>
+                {user.needs_sensitive_storage ? (
+                  <span className="font-bold text-red-600 dark:text-red-400">Yes</span>
+                ) : (
+                  <span className="text-gray-600 dark:text-gray-400">No</span>
+                )}
+              </div>
+              {fileManagementError && (
+                <div className="text-red-500 text-sm text-center mb-2">{fileManagementError}</div>
+              )}
+            </div>
+            {user.role === 'user' ? (
+              <div className="mt-4">
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">File Management:</h4>
+                  <button
+                    onClick={() => onFileAddClick(user.id)}
+                    className="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 text-xs"
+                  >
+                    Add File
+                  </button>
+                </div>
+                {user.gallery && user.gallery.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {user.gallery.map(file => (
+                      <div key={file.id} className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded shadow-sm">
+                        <span className="text-sm text-indigo-600 dark:text-indigo-300 truncate" title={file.filename}>
+                          {file.filename}
+                        </span>
+                        <div>
+                          <button
+                            onClick={() => onFileDownload(file.id, file.filename)}
+                            className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 font-medium mr-3"
+                          >
+                            Download
+                          </button>
+                          <button
+                            onClick={() => onFileDelete(file.id, file.filename)}
+                            className="text-sm text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 font-medium"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No files uploaded by this user.</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
+                This user role ({user.role}) does not have a file gallery.
+              </p>
+            )}
+          </td>
+        </tr>
+      )}
+    </React.Fragment>
+  );
+}
+
+
+// --- View 4: UserDashboard (This is now simpler) ---
 export function UserDashboard({ token, onLogout, currentUser }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -61,7 +317,6 @@ export function UserDashboard({ token, onLogout, currentUser }) {
   const filterMenuRef = useRef(null); 
   useClickOutside(filterMenuRef, () => setIsFilterMenuOpen(false));
 
-  // --- *** THIS IS THE FIX: Add 'management' to the default selected state *** ---
   const [selectedAccountTypes, setSelectedAccountTypes] = useState(ALL_ACCOUNT_TYPES);
   const [selectedSensitivity, setSelectedSensitivity] = useState('all');
 
@@ -343,6 +598,18 @@ export function UserDashboard({ token, onLogout, currentUser }) {
     return `${api.baseUrl}${url}`;
   };
 
+  const handleEditClick = (user) => {
+    if (user.role === 'user') {
+      setUserModalError(null);
+      setEditingUser(user);
+      setIsUserModalOpen(true);
+    } else {
+      setStaffModalMessage({ type: '', text: '' });
+      setEditingStaff(user);
+      setIsStaffModalOpen(true);
+    }
+  };
+
   return (
     <div className="w-full max-w-6xl mx-auto p-4">
       <input
@@ -410,99 +677,20 @@ export function UserDashboard({ token, onLogout, currentUser }) {
             </svg>
           </button>
           
-          {isFilterMenuOpen && (
-            <div className="absolute z-10 top-12 right-0 w-80 p-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl space-y-4">
-              
-              {/* Roles Section */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Role</label>
-                <div className="flex flex-col mt-2 space-y-1">
-                  {ALL_ROLES.map(role => (
-                    <label key={role} className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedRoles.includes(role)}
-                        onChange={() => handleRoleChange(role)}
-                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-400"
-                      />
-                      <span className="text-sm text-gray-700 dark:text-gray-300 capitalize">{role}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              
-              {/* --- *** MODIFIED: Account Type Section now includes 'management' *** --- */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Account Type</label>
-                <div className="flex flex-col mt-2 space-y-1">
-                  {ALL_ACCOUNT_TYPES.map(type => (
-                    <label key={type} className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedAccountTypes.includes(type)}
-                        onChange={() => handleAccountTypeChange(type)}
-                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-400"
-                      />
-                      <span className="text-sm text-gray-700 dark:text-gray-300 capitalize">{type}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              
-              {/* Sensitive Storage Section */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Storage Needs</label>
-                <div className="flex flex-col mt-2 space-y-1">
-                  {[
-                    { label: 'All', value: 'all' },
-                    { label: 'Yes (Sensitive)', value: 'true' },
-                    { label: 'No (Standard)', value: 'false' }
-                  ].map(item => (
-                    <label key={item.value} className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="sensitivity-filter"
-                        value={item.value}
-                        checked={selectedSensitivity === item.value}
-                        onChange={() => handleSensitivityChange(item.value)}
-                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded-full dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-400"
-                      />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">{item.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Date Range Section */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Date Joined</label>
-                <div className="mt-2 space-y-2">
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => {setStartDate(e.target.value); setCurrentPage(1);}}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    placeholder="From"
-                  />
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => {setEndDate(e.target.value); setCurrentPage(1);}}
-                    min={startDate}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    placeholder="To"
-                  />
-                </div>
-              </div>
-              
-              <button
-                onClick={handleClearFilters}
-                className="w-full text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
-              >
-                Clear All Filters
-              </button>
-            </div>
-          )}
+          <FilterMenu
+            isOpen={isFilterMenuOpen}
+            selectedRoles={selectedRoles}
+            onRoleChange={handleRoleChange}
+            selectedAccountTypes={selectedAccountTypes}
+            onAccountTypeChange={handleAccountTypeChange}
+            selectedSensitivity={selectedSensitivity}
+            onSensitivityChange={handleSensitivityChange}
+            startDate={startDate}
+            onStartDateChange={(val) => {setStartDate(val); setCurrentPage(1);}}
+            endDate={endDate}
+            onEndDateChange={(val) => {setEndDate(val); setCurrentPage(1);}}
+            onClearFilters={handleClearFilters}
+          />
         </div>
       </div>
       
@@ -533,7 +721,7 @@ export function UserDashboard({ token, onLogout, currentUser }) {
               <th scope="col" className="p-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                 Files
               </th>
-              <th scope="col" className="p-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('created_date')}>
+              <th scope="col" className="p-3 text-left text-xs font-method text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('created_date')}>
                 Joined {sortBy === 'created_date' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
               {isAdmin && (
@@ -550,146 +738,20 @@ export function UserDashboard({ token, onLogout, currentUser }) {
               <tr><td colSpan={isAdmin ? 7 : 6} className="p-4 text-center text-red-500">Failed to load users.</td></tr>
             ) : (
               users.map(user => (
-                <React.Fragment key={user.id}>
-                  <tr 
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700"
-                  >
-                    <td className="p-3 whitespace-nowrap" onClick={() => handleRowClick(user.id)} style={{ cursor: 'pointer' }}>
-                       <div className="flex items-center">
-                          <img 
-                            src={getFullImageUrl(user.profile_pic)} 
-                            alt={user.name} 
-                            className="w-10 h-10 rounded-full mr-3 object-cover"
-                            onError={(e) => { 
-                              const initials = user.name ? user.name[0].toUpperCase() : 'U';
-                              e.target.src = `https://placehold.co/150x150/E2D9FF/6842FF?text=${initials}`;
-                            }}
-                          />
-                          <span className="font-medium text-gray-900 dark:text-white">{user.name}</span>
-                       </div>
-                    </td>
-                    <td className="p-3 text-sm text-gray-700 dark:text-gray-300">{user.email || 'N/A'}</td>
-                    <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        user.role === 'admin' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                        user.role === 'employee' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
-                        'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                      }`}>
-                        {user.role}
-                      </span>
-                    </td>
-                    {/* --- *** MODIFIED: Account Type Cell now shows 'management' *** --- */}
-                    <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full capitalize ${
-                        user.account_type === 'management' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200' :
-                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                      }`}>
-                        {user.account_type || 'N/A'}
-                      </span>
-                    </td>
-                    {/* --- *** END OF MODIFICATION *** --- */}
-                    <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
-                      <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                        {user.gallery ? user.gallery.length : 0}
-                      </span>
-                    </td>
-                    <td className="p-3 text-sm text-gray-700 dark:text-gray-300">{user.created_date ? new Date(user.created_date).toLocaleDateString() : 'N/A'}</td>
-                    {isAdmin && (
-                      <td className="p-3 text-sm font-medium">
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (user.role === 'user') {
-                              setUserModalError(null);
-                              setEditingUser(user);
-                              setIsUserModalOpen(true);
-                            } else {
-                              setStaffModalMessage({ type: '', text: '' });
-                              setEditingStaff(user);
-                              setIsStaffModalOpen(true);
-                            }
-                          }} 
-                          className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-200 mr-3"
-                        >
-                          Edit
-                        </button>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteUser(user.id);
-                          }} 
-                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-200"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                  
-                  {expandedRowId === user.id && (
-                    <tr className="bg-gray-50 dark:bg-gray-700">
-                      <td colSpan={isAdmin ? 7 : 6} className="p-4">
-                        <div className="flex justify-between">
-                          <div className="text-sm text-gray-700 dark:text-gray-300">
-                            <span className="font-semibold">Sensitive Storage Request: </span>
-                            {user.needs_sensitive_storage ? (
-                              <span className="font-bold text-red-600 dark:text-red-400">Yes</span>
-                            ) : (
-                              <span className="text-gray-600 dark:text-gray-400">No</span>
-                            )}
-                          </div>
-                          {fileManagementError && (
-                            <div className="text-red-500 text-sm text-center mb-2">{fileManagementError}</div>
-                          )}
-                        </div>
-                        {user.role === 'user' ? (
-                          <div className="mt-4">
-                            <div className="flex justify-between items-center mb-2">
-                              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">File Management:</h4>
-                              <button
-                                onClick={() => handleAdminFileAddClick(user.id)}
-                                className="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 text-xs"
-                              >
-                                Add File
-                              </button>
-                            </div>
-                            {user.gallery && user.gallery.length > 0 ? (
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                {user.gallery.map(file => (
-                                  <div key={file.id} className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded shadow-sm">
-                                    <span className="text-sm text-indigo-600 dark:text-indigo-300 truncate" title={file.filename}>
-                                      {file.filename}
-                                    </span>
-                                    <div>
-                                      <button
-                                        onClick={() => handleDownload(file.id, file.filename)}
-                                        className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 font-medium mr-3"
-                                      >
-                                        Download
-                                      </button>
-                                      <button
-                                        onClick={() => handleAdminFileDelete(file.id, file.filename)}
-                                        className="text-sm text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 font-medium"
-                                      >
-                                        Delete
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-gray-500 dark:text-gray-400">No files uploaded by this user.</p>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
-                            This user role ({user.role}) does not have a file gallery.
-                          </p>
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
+                <UserRow
+                  key={user.id}
+                  user={user}
+                  isAdmin={isAdmin}
+                  isExpanded={expandedRowId === user.id}
+                  onRowClick={handleRowClick}
+                  getFullImageUrl={getFullImageUrl}
+                  onEditClick={handleEditClick}
+                  onDeleteClick={handleDeleteUser}
+                  fileManagementError={fileManagementError}
+                  onFileAddClick={handleAdminFileAddClick}
+                  onFileDownload={handleDownload}
+                  onFileDelete={handleAdminFileDelete}
+                />
               ))
             )}
           </tbody>
@@ -704,7 +766,7 @@ export function UserDashboard({ token, onLogout, currentUser }) {
         />
       )}
 
-      {/* --- Staff Modal (Unchanged, maintains division of labour) --- */}
+      {/* --- Staff Modal --- */}
       <Modal isOpen={isStaffModalOpen} onClose={closeStaffModal} title={editingStaff?.id ? 'Edit Staff' : 'Create New Staff'}>
         {staffModalMessage.text && (
           <div className={`p-2 mb-4 rounded text-sm ${staffModalMessage.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
@@ -722,12 +784,12 @@ export function UserDashboard({ token, onLogout, currentUser }) {
           roleOptions={['admin', 'employee']} 
           showSettings={false}
           allowEmailEdit={true}
-          showAccountType={false} // --- CORRECT: Hidden for staff
-          showSensitiveStorage={false} // --- CORRECT: Hidden for staff
+          showAccountType={false}
+          showSensitiveStorage={false}
         />
       </Modal>
       
-      {/* --- User Modal (MODIFIED to show new fields) --- */}
+      {/* --- User Modal --- */}
       <Modal isOpen={isUserModalOpen} onClose={closeUserModal} title={editingUser?.id ? 'Edit User' : 'Create New User'}>
         {userModalError && (
           <div className={`p-2 mb-4 rounded text-sm bg-red-100 text-red-700`}>
@@ -744,8 +806,8 @@ export function UserDashboard({ token, onLogout, currentUser }) {
           showRole={false}
           showSettings={false} 
           allowEmailEdit={true}
-          showAccountType={true} // --- CORRECT: Shown for user
-          showSensitiveStorage={true} // --- CORRECT: Shown for user
+          showAccountType={true}
+          showSensitiveStorage={true}
         />
       </Modal>
     </div>
