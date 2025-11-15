@@ -1,7 +1,6 @@
 import time
 from flask import Flask, request, jsonify, send_file, redirect
 from flask_cors import CORS
-# --- FIX: Added timezone to the import ---
 from datetime import datetime as dt, timedelta, timezone 
 import jwt
 from functools import wraps
@@ -21,8 +20,7 @@ app = Flask(__name__)
 CORS(app)  # This enables Cross-Origin Resource Sharing
 app.config['SECRET_KEY'] = 'your-super-secret-key-that-should-be-in-an-env-file'
 
-# --- FIX (Issues 2, 3, 8, 11): Added constants to fix duplicated literals ---
-#
+# --- Constants ---
 ERROR_MSG_18_PLUS = "User must be at least 18 years old."
 ERROR_MSG_EMAIL_EXISTS = "This email address is already registered."
 ERROR_MSG_ADMIN_REQUIRED = "Admin access required"
@@ -82,7 +80,6 @@ def is_over_18(date_string):
         return True 
     try:
         dob = dt.strptime(date_string, '%Y-%m-%d').date()
-        # --- FIX (Issue 15): Use timezone-aware datetime ---
         eighteen_years_ago = dt.now(timezone.utc).date() - timedelta(days=18*365.25)
         return dob <= eighteen_years_ago
     except ValueError:
@@ -192,11 +189,9 @@ def register():
     errors = validate_user_data(data, is_create=True, check_password=True)
     
     if selected_date and not is_over_18(selected_date):
-        # --- FIX (Issue 2): Use constant ---
         errors.append(ERROR_MSG_18_PLUS)
         
     if user_collection.find_one({"email": email}):
-        # --- FIX (Issue 3): Use constant ---
         errors.append(ERROR_MSG_EMAIL_EXISTS)
     
     if errors:
@@ -233,7 +228,6 @@ def register():
         "role": "user", 
         "account_type": data.get('account_type', 'personal'),
         "needs_sensitive_storage": data.get('needs_sensitive_storage') == 'true',
-        # --- FIX (Issue 4): Use timezone-aware datetime ---
         "created_date": dt.now(timezone.utc),
         "profile_pic_id": profile_pic_id,
         "selected_date": selected_date,
@@ -248,7 +242,6 @@ def register():
     token = jwt.encode(
         {
             'user_id': new_user_id,
-            # --- FIX (Issue 5): Use timezone-aware datetime ---
             'exp': dt.now(timezone.utc) + timedelta(hours=24)
         },
         app.config['SECRET_KEY'],
@@ -272,10 +265,8 @@ def login():
         user_role = user.get('role', 'user').lower()
         
         if user_role in ['admin', 'employee']:
-            # --- FIX (Issue 6): Use timezone-aware datetime ---
             expires = dt.now(timezone.utc) + timedelta(hours=1)
         else:
-            # --- FIX (Issue 7): Use timezone-aware datetime ---
             expires = dt.now(timezone.utc) + timedelta(hours=24)
         
         token = jwt.encode(
@@ -439,7 +430,6 @@ def update_my_profile_pic(current_user):
 @token_required
 def admin_create_user(current_user):
     if not is_admin(current_user):
-        # --- FIX (Issue 8): Use constant ---
         return jsonify({"message": ERROR_MSG_ADMIN_REQUIRED}), 403
 
     data = request.form
@@ -449,11 +439,9 @@ def admin_create_user(current_user):
     errors = validate_user_data(data, is_create=True, check_password=True)
     
     if selected_date and not is_over_18(selected_date):
-        # --- FIX (Issue 2): Use constant ---
         errors.append(ERROR_MSG_18_PLUS)
         
     if user_collection.find_one({"email": email}):
-        # --- FIX (Issue 3): Use constant ---
         errors.append(ERROR_MSG_EMAIL_EXISTS)
     
     if errors:
@@ -478,7 +466,6 @@ def admin_create_user(current_user):
         "role": "user", 
         "account_type": data.get('account_type', 'personal'),
         "needs_sensitive_storage": data.get('needs_sensitive_storage') == 'true',
-        # --- FIX (Issue 9): Use timezone-aware datetime ---
         "created_date": dt.now(timezone.utc),
         "profile_pic_id": profile_pic_id,
         "selected_date": selected_date,
@@ -491,79 +478,18 @@ def admin_create_user(current_user):
     return jsonify(serialize_user(new_user, include_email=True)), 201
 
 
-# --- FIX (Issue 12): Refactored admin_update_user to reduce Cognitive Complexity from 20 ---
-#
-# Reason: The original function was very large, with all validation, update logic,
-# and file handling in one block.
-# This refactor extracts logic into smaller, single-responsibility helper functions
-# and uses "return early" to avoid deep nesting.
-
-def _validate_admin_user_update(data, user_to_update):
-    """Helper to validate admin updates for a user."""
-    errors = validate_user_data(data, is_create=False, check_password=True)
-    user_id = str(user_to_update['_id'])
-    
-    selected_date = data.get('selected_date')
-    if selected_date and not is_over_18(selected_date):
-        # --- FIX (Issue 2): Use constant ---
-        errors.append(ERROR_MSG_18_PLUS)
-
-    email = data.get('email', '').lower()
-    if email and email != user_to_update.get('email'):
-        existing_user = user_collection.find_one({"email": email})
-        if existing_user and str(existing_user['_id']) != user_id:
-            # --- FIX (Issue 3): Use constant ---
-            errors.append(ERROR_MSG_EMAIL_EXISTS)
-    
-    if data.get('account_type') == 'management':
-        errors.append("Cannot assign 'management' account type to a 'user' role.")
-        
-    return errors
-
-def _build_admin_user_updates(data):
-    """Helper to build the $set dictionary for user updates."""
-    updates = {
-        "name": data.get('name'),
-        "selected_date": data.get('selected_date'),
-        "email": data.get('email', '').lower(),
-        "account_type": data.get('account_type'),
-        "needs_sensitive_storage": data.get('needs_sensitive_storage') == 'true',
-    }
-    # Remove keys that were not provided
-    updates = {k: v for k, v in updates.items() if v is not None}
-    
-    if data.get('password'):
-        updates['password_hash'] = generate_password_hash(data['password'])
-    
-    return updates
-
-def _handle_admin_profile_pic_update(file, user_to_update):
-    """Helper to delete old pic and save new one."""
-    if user_to_update.get('profile_pic_id'):
-        try:
-            fs.delete(ObjectId(user_to_update['profile_pic_id']))
-        except Exception as e:
-            print(f"Old pic not found: {e}")
-    
-    filename = secure_filename(file.filename)
-    file_id = fs.put(file, filename=filename, content_type=file.mimetype)
-    return str(file_id)
-
 @app.route('/admin/update-user/<string:user_id>', methods=['POST'])
 @token_required
 def admin_update_user(current_user, user_id):
     if not is_admin(current_user):
-        # --- FIX (Issue 8): Use constant ---
         return jsonify({"message": ERROR_MSG_ADMIN_REQUIRED}), 403
     
     try:
         user_to_update = user_collection.find_one({"_id": ObjectId(user_id)})
     except Exception:
-        # --- FIX (Issue 11): Use constant ---
         return jsonify({"message": ERROR_MSG_USER_NOT_FOUND}), 404
 
     if not user_to_update:
-        # --- FIX (Issue 11): Use constant ---
         return jsonify({"message": ERROR_MSG_USER_NOT_FOUND}), 404
         
     if user_to_update.get('role') != 'user':
@@ -586,16 +512,59 @@ def admin_update_user(current_user, user_id):
          
     updated_user = user_collection.find_one({"_id": ObjectId(user_id)})
     return jsonify(serialize_user(updated_user, include_email=True)), 200
-# --- End of Refactor ---
+
+# --- These helpers are used by admin_update_user ---
+def _validate_admin_user_update(data, user_to_update):
+    """Helper to validate admin updates for a user."""
+    errors = validate_user_data(data, is_create=False, check_password=True)
+    user_id = str(user_to_update['_id'])
+    
+    selected_date = data.get('selected_date')
+    if selected_date and not is_over_18(selected_date):
+        errors.append(ERROR_MSG_18_PLUS)
+
+    email = data.get('email', '').lower()
+    if email and email != user_to_update.get('email'):
+        existing_user = user_collection.find_one({"email": email})
+        if existing_user and str(existing_user['_id']) != user_id:
+            errors.append(ERROR_MSG_EMAIL_EXISTS)
+    
+    if data.get('account_type') == 'management':
+        errors.append("Cannot assign 'management' account type to a 'user' role.")
+        
+    return errors
+
+def _build_admin_user_updates(data):
+    """Helper to build the $set dictionary for user updates."""
+    updates = {
+        "name": data.get('name'),
+        "selected_date": data.get('selected_date'),
+        "email": data.get('email', '').lower(),
+        "account_type": data.get('account_type'),
+        "needs_sensitive_storage": data.get('needs_sensitive_storage') == 'true',
+    }
+    updates = {k: v for k, v in updates.items() if v is not None}
+    
+    if data.get('password'):
+        updates['password_hash'] = generate_password_hash(data['password'])
+    
+    return updates
+
+def _handle_admin_profile_pic_update(file, user_to_update):
+    """Helper to delete old pic and save new one."""
+    if user_to_update.get('profile_pic_id'):
+        try:
+            fs.delete(ObjectId(user_to_update['profile_pic_id']))
+        except Exception as e:
+            print(f"Old pic not found: {e}")
+    
+    filename = secure_filename(file.filename)
+    file_id = fs.put(file, filename=filename, content_type=file.mimetype)
+    return str(file_id)
 
 
 # --- Admin/Dashboard Routes ---
 
-# --- FIX (Issue 10): Refactored get_users to reduce Cognitive Complexity from 25 ---
-#
-# Reason: The original function was building a complex dictionary (query) and
-# handling pagination, sorting, and data fetching all in one.
-# This refactor extracts the query-building logic into a separate, focused helper function.
 def _build_user_query(args):
     """Helper function to build the MongoDB query from request args."""
     search = args.get('search', '').lower()
@@ -660,7 +629,6 @@ def get_users(current_user):
     sort_order_str = request.args.get('sort_order', 'asc')
     sort_order = ASCENDING if sort_order_str == 'asc' else DESCENDING
     
-    # Build query using the helper
     query = _build_user_query(request.args)
         
     total_users = user_collection.count_documents(query)
@@ -680,7 +648,6 @@ def get_users(current_user):
         "total_users": total_users,
         "total_pages": total_pages
     })
-# --- End of Refactor ---
 
 @app.route('/users/<string:user_id>', methods=['GET'])
 @token_required
@@ -692,7 +659,6 @@ def get_user(current_user, user_id):
         user = user_collection.find_one({"_id": ObjectId(user_id)})
         if user:
             return jsonify(serialize_user(user, include_email=True)), 200
-        # --- FIX (Issue 11): Use constant ---
         return jsonify({"message": ERROR_MSG_USER_NOT_FOUND}), 404
     except Exception:
         return jsonify({"message": "Invalid User ID"}), 400
@@ -701,7 +667,6 @@ def get_user(current_user, user_id):
 @token_required
 def create_user(current_user):
     if not is_admin(current_user):
-        # --- FIX (Issue 8): Use constant ---
         return jsonify({"message": ERROR_MSG_ADMIN_REQUIRED}), 403
         
     data = request.json
@@ -715,11 +680,9 @@ def create_user(current_user):
         errors.append("New staff role must be 'admin' or 'employee'.")
         
     if selected_date and not is_over_18(selected_date):
-        # --- FIX (Issue 2): Use constant ---
         errors.append(ERROR_MSG_18_PLUS)
 
     if user_collection.find_one({"email": email}):
-        # --- FIX (Issue 3): Use constant ---
         errors.append(ERROR_MSG_EMAIL_EXISTS)
         
     if errors:
@@ -734,7 +697,6 @@ def create_user(current_user):
         "email": email,
         "password_hash": password_hash,
         "role": role,
-        # --- FIX (Issue 13): Use timezone-aware datetime ---
         "created_date": dt.now(timezone.utc),
         "selected_date": selected_date,
         "account_type": "management"
@@ -744,51 +706,61 @@ def create_user(current_user):
     
     return jsonify(serialize_user(new_user, include_email=True)), 201
 
-# --- START: REFACTOR FOR L594 (Cognitive Complexity) ---
-#
-# Reason: This function was incorrectly calling the complex `validate_user_data` function.
-# This refactor makes it self-contained and only validates fields relevant to staff.
-def _validate_staff_update(data, user_to_update):
-    """Helper to validate admin updates for a staff member."""
-    errors = [] # Start with a fresh list
-    user_id = str(user_to_update['_id'])
 
-    # 1. Validate Name
+# --- START: REFACTOR FOR L599 (Cognitive Complexity) ---
+#
+# Reason: The old _validate_staff_update was 17 complexity.
+# We break it into 5 small functions, each with a complexity of ~3-5.
+# The new _validate_staff_update just calls them and has a complexity of 0.
+
+def _validate_staff_name(data, errors):
+    """Validates name for staff update."""
     name = data.get('name')
     if 'name' in data and (not name or len(name) < 2):
         errors.append("Name must be at least 2 characters long.")
 
-    # 2. Validate Email
+def _validate_staff_email(data, user_to_update, errors):
+    """Validates email for staff update."""
     email = data.get('email', '').lower()
     if 'email' in data and (not email or not re.match(EMAIL_REGEX, email.lower())):
         errors.append("Please provide a valid email address.")
     elif email and email != user_to_update.get('email'):
         existing_user = user_collection.find_one({"email": email})
-        if existing_user and str(existing_user['_id']) != user_id:
+        if existing_user and str(existing_user['_id']) != str(user_to_update['_id']):
             errors.append(ERROR_MSG_EMAIL_EXISTS)
-    
-    # 3. Validate Password
+
+def _validate_staff_password(data, errors):
+    """Validates password for staff update."""
     password = data.get('password')
     if 'password' in data and password and len(password) < 6:
-         errors.append("New password must be at least 6 characters long.")
+            errors.append("New password must be at least 6 characters long.")
 
-    # 4. Validate Role
+def _validate_staff_role(data, errors):
+    """Validates role for staff update."""
     role = data.get('role')
     if role and role not in ['admin', 'employee']:
-         errors.append("Role can only be 'admin' or 'employee'.")
+            errors.append("Role can only be 'admin' or 'employee'.")
 
-    # 5. Validate Date of Birth
+def _validate_staff_dob(data, errors):
+    """Validates date of birth for staff update."""
     selected_date = data.get('selected_date')
     if selected_date and not is_over_18(selected_date):
         errors.append(ERROR_MSG_18_PLUS)
-    
+
+def _validate_staff_update(data, user_to_update):
+    """Helper to validate admin updates for a staff member."""
+    errors = []
+    _validate_staff_name(data, errors)
+    _validate_staff_email(data, user_to_update, errors)
+    _validate_staff_password(data, errors)
+    _validate_staff_role(data, errors)
+    _validate_staff_dob(data, errors)
     return errors
 
 @app.route('/users/<string:user_id>', methods=['PUT'])
 @token_required
 def update_user(current_user, user_id):
     if not is_admin(current_user):
-        # --- FIX (Issue 8): Use constant ---
         return jsonify({"message": ERROR_MSG_ADMIN_REQUIRED}), 403
 
     try:
@@ -797,7 +769,6 @@ def update_user(current_user, user_id):
          return jsonify({"message": "Invalid User ID"}), 400
 
     if not user_to_update:
-        # --- FIX (Issue 11): Use constant ---
         return jsonify({"message": ERROR_MSG_USER_NOT_FOUND}), 404
             
     if user_to_update.get('role') not in ['admin', 'employee']:
@@ -805,7 +776,6 @@ def update_user(current_user, user_id):
             
     data = request.json
     
-    # --- FIX: Call the new, simpler validation function ---
     errors = _validate_staff_update(data, user_to_update)
     if errors:
         return jsonify({"message": "\n".join(errors)}), 400
@@ -830,50 +800,63 @@ def update_user(current_user, user_id):
     
     updated_user = user_collection.find_one({"_id": ObjectId(user_id)})
     return jsonify(serialize_user(updated_user, include_email=True)), 200
-# --- END: REFACTOR FOR L594 ---
+# --- END: REFACTOR FOR L599 ---
+
+
+# --- START: REFACTOR FOR L751 (Cognitive Complexity) ---
+#
+# Reason: The original delete_user function was 17 complexity
+# because it handled file deletions. We extract that logic.
+
+def _delete_user_gallery_files(user_to_delete):
+    """Helper to delete all files in a user's gallery."""
+    if user_to_delete.get('role') == 'user' and 'gallery' in user_to_delete:
+        print(f"User {user_to_delete['_id']} is a 'user'. Deleting their {len(user_to_delete['gallery'])} files...")
+        for file_obj in user_to_delete['gallery']:
+            try:
+                fs.delete(ObjectId(file_obj['id']))
+                print(f"  > Deleted file {file_obj['id']} ({file_obj['filename']})")
+            except Exception as e:
+                print(f"  > Error deleting file {file_obj['id']}: {e}")
+
+def _delete_user_profile_pic(user_to_delete):
+    """Helper to delete a user's profile picture."""
+    if user_to_delete.get('profile_pic_id'):
+        try:
+            fs.delete(ObjectId(user_to_delete['profile_pic_id']))
+            print(f"  > Deleted profile pic {user_to_delete['profile_pic_id']}")
+        except Exception as e:
+            print(f"  > Error deleting profile pic: {e}")
 
 @app.route('/users/<string:user_id>', methods=['DELETE'])
 @token_required
 def delete_user(current_user, user_id):
     if not is_admin(current_user):
-        # --- FIX (Issue 8): Use constant ---
         return jsonify({"message": ERROR_MSG_ADMIN_REQUIRED}), 403
         
     try:
         user_to_delete = user_collection.find_one({"_id": ObjectId(user_id)})
         if not user_to_delete:
-            # --- FIX (Issue 11): Use constant ---
             return jsonify({"message": ERROR_MSG_USER_NOT_FOUND}), 404
 
-        if user_to_delete.get('role') == 'user' and 'gallery' in user_to_delete:
-            print(f"User {user_id} is a 'user'. Deleting their {len(user_to_delete['gallery'])} files...")
-            for file_obj in user_to_delete['gallery']:
-                try:
-                    fs.delete(ObjectId(file_obj['id']))
-                    print(f"  > Deleted file {file_obj['id']} ({file_obj['filename']})")
-                except Exception as e:
-                    print(f"  > Error deleting file {file_obj['id']}: {e}")
-        
-        if user_to_delete.get('profile_pic_id'):
-            try:
-                fs.delete(ObjectId(user_to_delete['profile_pic_id']))
-                print(f"  > Deleted profile pic {user_to_delete['profile_pic_id']}")
-            except Exception as e:
-                print(f"  > Error deleting profile pic: {e}")
+        # Call helpers to do the complex work
+        _delete_user_gallery_files(user_to_delete)
+        _delete_user_profile_pic(user_to_delete)
                 
-        result = user_collection.delete_one({"_id": ObjectId(user_id)})
+        # Now the main function just deletes the user
+        user_collection.delete_one({"_id": ObjectId(user_id)})
             
         return jsonify({"message": "User and all associated files deleted"}), 200
     except Exception as e:
         print(f"Error deleting user: {e}")
         return jsonify({"message": "Invalid User ID or deletion error"}), 400
+# --- END: REFACTOR FOR L751 ---
 
 
 @app.route('/admin/user/<string:user_id>/file', methods=['POST'])
 @token_required
 def admin_add_file_to_user(current_user, user_id):
     if not is_admin(current_user):
-        # --- FIX (Issue 8): Use constant ---
         return jsonify({"message": ERROR_MSG_ADMIN_REQUIRED}), 403
         
     user = user_collection.find_one({"_id": ObjectId(user_id)})
@@ -905,7 +888,6 @@ def admin_add_file_to_user(current_user, user_id):
 @token_required
 def admin_delete_file(current_user, file_id):
     if not is_admin(current_user):
-        # --- FIX (Issue 8): Use constant ---
         return jsonify({"message": ERROR_MSG_ADMIN_REQUIRED}), 403
         
     try:

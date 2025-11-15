@@ -25,8 +25,7 @@ const ALL_ROLES = ['admin', 'employee', 'user'];
 const ALL_ACCOUNT_TYPES = ['personal', 'professional', 'academic', 'management'];
 
 
-// --- FIX (Issue 18): Extracted FilterMenu component to reduce complexity ---
-//
+// --- FilterMenu Component (Extracted to reduce complexity) ---
 function FilterMenu({
   isOpen,
   selectedRoles,
@@ -137,7 +136,7 @@ function FilterMenu({
   );
 }
 
-// --- START: REFACTOR FOR L285 (Cognitive Complexity) ---
+// --- START: REFACTOR FOR L309 (Cognitive Complexity) ---
 //
 // 1. Create a new component for the complex "expanded row" content
 function ExpandedRowContent({ 
@@ -302,10 +301,95 @@ function UserRow({
     </React.Fragment>
   );
 }
-// --- END: REFACTOR FOR L285 ---
+// --- END: REFACTOR FOR L309 (Step 1/2) ---
 
 
-// --- View 4: UserDashboard (This is now simpler) ---
+// --- START: REFACTOR FOR L309 (Step 2/2) ---
+//
+// 3. Create helper functions for the most complex logic (save handlers)
+//    These live *outside* the UserDashboard component.
+
+/**
+ * Handles the logic for saving a staff member (create or update).
+ */
+async function _executeSaveStaff(
+  formData, token, editingStaff, 
+  setStaffModalMessage, closeStaffModal, 
+  resetFiltersAndFetch, fetchUsers
+) {
+  setStaffModalMessage({ type: '', text: '' });
+  const staffData = { ...formData };
+  
+  try {
+    const isCreating = !editingStaff?.id; 
+
+    if (isCreating) {
+      await api.createStaff(staffData, token);
+    } else {
+      if (!staffData.password) {
+        delete staffData.password;
+      }
+      await api.updateStaff(editingStaff.id, staffData, token);
+    }
+    
+    closeStaffModal();
+
+    if (isCreating) {
+      resetFiltersAndFetch(); // Reset filters on create
+    } else {
+      fetchUsers(); // Just refresh on update
+    }
+    
+  } catch (err) {
+    setStaffModalMessage({ type: 'error', text: err.message.split('\n').map((msg, i) => <div key={i}>{msg}</div>) });
+  }
+}
+
+/**
+ * Handles the logic for saving a user (create or update).
+ */
+async function _executeSaveUser(
+  formData, profilePicFile, token, editingUser,
+  setUserModalError, closeUserModal,
+  resetFiltersAndFetch, fetchUsers
+) {
+  setUserModalError(null);
+  const data = new FormData();
+  const isCreating = !editingUser?.id;
+  
+  for (const key in formData) {
+    if (key === 'password' && !isCreating && !formData[key]) {
+      continue;
+    }
+    data.append(key, formData[key]);
+  }
+  
+  if (profilePicFile) {
+    data.append('profile_pic', profilePicFile);
+  }
+  
+  try {
+    if (isCreating) {
+      await api.adminCreateUser(data, token);
+    } else {
+      await api.adminUpdateUser(editingUser.id, data, token);
+    }
+    
+    closeUserModal();
+    
+    if (isCreating) {
+      resetFiltersAndFetch(); // Reset filters on create
+    } else {
+      fetchUsers(); // Just refresh on update
+    }
+
+  } catch (err) {
+    setUserModalError(err.message.split('\n').map((msg, i) => <div key={i}>{msg}</div>));
+  }
+}
+
+
+// 4. The main component is now much simpler.
 export function UserDashboard({ token, onLogout, currentUser }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -347,21 +431,12 @@ export function UserDashboard({ token, onLogout, currentUser }) {
   const isAdmin = currentUser.role.toLowerCase() === 'admin';
 
   const initialUserData = useMemo(() => ({
-    name: '',
-    email: '',
-    password: '',
-    role: 'user',
-    selected_date: '',
-    account_type: 'personal',
-    needs_sensitive_storage: false,
+    name: '', email: '', password: '', role: 'user',
+    selected_date: '', account_type: 'personal', needs_sensitive_storage: false,
   }), []); 
   
   const initialStaffData = useMemo(() => ({
-    name: '',
-    email: '',
-    password: '',
-    role: 'employee',
-    selected_date: '',
+    name: '', email: '', password: '', role: 'employee', selected_date: '',
   }), []); 
 
   // Data Fetching
@@ -436,15 +511,21 @@ export function UserDashboard({ token, onLogout, currentUser }) {
     setSelectedSensitivity(value);
     setCurrentPage(1);
   };
-
-  const handleClearFilters = () => {
+  
+  const resetFiltersAndFetch = () => {
+    setSearchTerm('');
     setSelectedRoles(ALL_ROLES);
     setSelectedAccountTypes(ALL_ACCOUNT_TYPES);
     setSelectedSensitivity('all');
     setStartDate('');
     setEndDate('');
+    setCurrentPage(1); 
+    // fetchUsers will be called by the useEffect hook due to state changes
+  };
+
+  const handleClearFilters = () => {
     setIsFilterMenuOpen(false);
-    setCurrentPage(1);
+    resetFiltersAndFetch();
   };
   
   const handleDownload = async (fileId, filename) => {
@@ -456,80 +537,21 @@ export function UserDashboard({ token, onLogout, currentUser }) {
     }
   };
   
-  const handleSaveStaff = async (formData, profilePicFile) => {
-    setStaffModalMessage({ type: '', text: '' });
-    const staffData = {...formData};
-    
-    try {
-      const isCreating = !editingStaff?.id; 
-
-      if (isCreating) {
-        await api.createStaff(staffData, token);
-      } else {
-        if (!staffData.password) {
-          delete staffData.password;
-        }
-        await api.updateStaff(editingStaff.id, staffData, token);
-      }
-      closeStaffModal();
-
-      if (isCreating) {
-        setSearchTerm('');
-        setSelectedRoles(ALL_ROLES);
-        setSelectedAccountTypes(ALL_ACCOUNT_TYPES);
-        setSelectedSensitivity('all');
-        setStartDate('');
-        setEndDate('');
-        setCurrentPage(1); 
-      } else {
-        fetchUsers(); 
-      }
-      
-    } catch (err) {
-      setStaffModalMessage({ type: 'error', text: err.message.split('\n').map((msg, i) => <div key={i}>{msg}</div>) });
-    }
+  // --- Complex handlers are now simple calls to the outside functions ---
+  const handleSaveStaff = (formData, profilePicFile) => {
+    _executeSaveStaff(
+      formData, token, editingStaff, 
+      setStaffModalMessage, closeStaffModal, 
+      resetFiltersAndFetch, fetchUsers
+    );
   };
   
-  const handleSaveUser = async (formData, profilePicFile) => {
-    setUserModalError(null);
-    const data = new FormData();
-    
-    for (const key in formData) {
-      if (key === 'password' && (editingUser && editingUser.id) && !formData[key]) {
-        continue;
-      }
-      data.append(key, formData[key]);
-    }
-    
-    if (profilePicFile) {
-      data.append('profile_pic', profilePicFile);
-    }
-    
-    try {
-      const isCreating = !editingUser?.id;
-
-      if (isCreating) {
-        await api.adminCreateUser(data, token);
-      } else {
-        await api.adminUpdateUser(editingUser.id, data, token);
-      }
-      closeUserModal();
-      
-      if (isCreating) {
-        setSearchTerm('');
-        setSelectedRoles(ALL_ROLES);
-        setSelectedAccountTypes(ALL_ACCOUNT_TYPES);
-        setSelectedSensitivity('all');
-        setStartDate('');
-        setEndDate('');
-        setCurrentPage(1);
-      } else {
-        fetchUsers();
-      }
-
-    } catch (err) {
-      setUserModalError(err.message.split('\n').map((msg, i) => <div key={i}>{msg}</div>));
-    }
+  const handleSaveUser = (formData, profilePicFile) => {
+    _executeSaveUser(
+      formData, profilePicFile, token, editingUser,
+      setUserModalError, closeUserModal,
+      resetFiltersAndFetch, fetchUsers
+    );
   };
 
 
@@ -837,3 +859,4 @@ export function UserDashboard({ token, onLogout, currentUser }) {
     </div>
   );
 }
+// --- END: REFACTOR FOR L309 ---
