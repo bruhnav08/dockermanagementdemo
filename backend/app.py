@@ -900,6 +900,27 @@ def admin_delete_file(current_user, file_id):
         print(f"Error deleting file: {e}")
         return jsonify({"message": "File not found or invalid ID"}), 404
         
+# --- NEW DEMO FEATURE: Get Latest File ---
+@app.route('/latest-file', methods=['GET'])
+def get_latest_file():
+    try:
+        # Find the most recently uploaded file in GridFS
+        last_file = db['fs.files'].find_one(sort=[("uploadDate", DESCENDING)])
+        
+        if not last_file:
+            return jsonify({"message": "No files found in database"}), 404
+        
+        grid_out = fs.get(last_file['_id'])
+        
+        return send_file(
+            io.BytesIO(grid_out.read()),
+            mimetype=grid_out.content_type,
+            as_attachment=False, # Open in browser
+            download_name=grid_out.filename
+        )
+    except Exception as e:
+        print(f"Error getting latest file: {e}")
+        return jsonify({"message": "Error retrieving file"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

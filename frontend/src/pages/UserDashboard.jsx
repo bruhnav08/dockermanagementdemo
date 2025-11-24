@@ -759,6 +759,13 @@ function getFullImageUrl(url) {
 }
 
 function DashboardHeader({ currentUser, isAdmin, onLogout, onCreateUserClick, onCreateStaffClick }) {
+  
+  // --- NEW: Handler to open the latest file ---
+  const handleViewLatest = () => {
+    // Opens the new backend route in a new tab
+    window.open(`${api.baseUrl}/latest-file`, '_blank');
+  };
+
   return (
     <div className="flex flex-wrap justify-between items-center mb-4 gap-4">
       <div>
@@ -770,6 +777,16 @@ function DashboardHeader({ currentUser, isAdmin, onLogout, onCreateUserClick, on
       <div className="flex space-x-2">
         {isAdmin && (
           <>
+            {/* --- NEW DEMO BUTTON --- */}
+            <button
+              onClick={handleViewLatest}
+              className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 font-bold shadow-sm"
+              title="Opens the most recently uploaded image from MongoDB"
+            >
+              View Latest Upload
+            </button>
+            {/* ----------------------- */}
+            
             <button
               onClick={onCreateUserClick}
               className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
