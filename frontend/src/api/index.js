@@ -55,9 +55,7 @@ class API {
     document.body.appendChild(link);
     link.click();
 
-    // --- THIS IS THE FIX ---
-    link.remove(); // Replaced parentNode.removeChild(link)
-    // --- END OF FIX ---
+    link.remove(); 
 
     window.URL.revokeObjectURL(link.href);
     return { message: "File downloaded" };
@@ -167,7 +165,6 @@ class API {
   }
 
   downloadFile(fileId, token) {
-    // --- FIX: Tell the request function to expect a file ---
     return this.request(`/file/${fileId}`, { token, isFileDownload: true });
   }
 
@@ -177,20 +174,22 @@ class API {
   }
 
   createStaff(userData, token) {
-    // --- FIX: Route was /staff, backend has /users ---
+    // --- FIX: Added isFormData: true to allow image uploads ---
     return this.request('/users', {
       method: 'POST',
       body: userData,
       token,
+      isFormData: true, 
     });
   }
 
   updateStaff(id, userData, token) {
-    // --- FIX: Route was /staff/:id, backend has /users/:id ---
+    // --- FIX: Added isFormData: true to allow image uploads ---
     return this.request(`/users/${id}`, {
       method: 'PUT',
       body: userData,
       token,
+      isFormData: true,
     });
   }
 
@@ -247,5 +246,5 @@ class API {
 }
 
 // Instantiate and export a single API instance
-const api = new API('http://localhost:5000');
+const api = new API('/api'); 
 export default api;

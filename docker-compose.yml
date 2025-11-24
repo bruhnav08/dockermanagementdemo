@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # --- Backend Service ---
+  backend:
+    build: ./backend
+    container_name: flask_backend
+    restart: always
+    environment:
+      # Secrets and DB Connection
+      - SECRET_KEY=replace_this_with_a_random_secret_string
+      - MONGO_URL=mongodb://mongo_db:27017/user_auth_db
+    depends_on:
+      - mongo_db
+    networks:
+      - app-network
+
+  # --- Frontend Service ---
+  frontend:
+    build: ./frontend
+    container_name: react_frontend
+    restart: always
+    ports:
+      - "80:80" # Maps VM port 80 to Container port 80
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  # --- Database Service ---
+  mongo_db:
+    image: mongo:6.0
+    container_name: mongo_db
+    restart: always
+    volumes:
+      # Persist data to the VM's disk
+      - mongo_data:/data/db
+    networks:
+      - app-network
+
+# Define persistent volume for Database
+volumes:
+  mongo_data:
+
+# Define a private internal network
+networks:
+  app-network:
+    driver: bridge

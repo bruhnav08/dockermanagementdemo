@@ -1,4 +1,5 @@
 import time
+import os
 from flask import Flask, request, jsonify, send_file, redirect
 from flask_cors import CORS
 from datetime import datetime as dt, timedelta, timezone 
@@ -13,23 +14,22 @@ import re
 from pymongo import MongoClient, DESCENDING, ASCENDING
 from gridfs import GridFS
 from bson import ObjectId
-# --- End of Imports ---
-
 
 app = Flask(__name__)
-CORS(app)  # This enables Cross-Origin Resource Sharing
-app.config['SECRET_KEY'] = 'your-super-secret-key-that-should-be-in-an-env-file'
+CORS(app)
+
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-super-secret-key-that-should-be-in-an-env-file')
 
 # --- Constants ---
 ERROR_MSG_18_PLUS = "User must be at least 18 years old."
 ERROR_MSG_EMAIL_EXISTS = "This email address is already registered."
 ERROR_MSG_ADMIN_REQUIRED = "Admin access required"
 ERROR_MSG_USER_NOT_FOUND = "User not found"
-# --- End of Constants ---
 
 # --- MongoDB Connection ---
 try:
-    client = MongoClient('mongodb://localhost:27017/', serverSelectionTimeoutMS=5000)
+    mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017/')
+    client = MongoClient(mongo_url, serverSelectionTimeoutMS=5000)
     client.server_info()
     db = client['user_auth_db']
     user_collection = db['users']
@@ -37,14 +37,9 @@ try:
     print("Connected to MongoDB!")
 except Exception as e:
     print(f"Error: Could not connect to MongoDB. Is it running? \n{e}")
-# --- End of DB Connection ---
 
 # --- Helper Function to Serialize MongoDB Docs ---
 def serialize_user(user, include_email=True):
-    """
-    Serializes a MongoDB user document into a JSON-friendly format.
-    Includes all fields from the registration and user forms.
-    """
     if not user:
         return None
 
@@ -71,11 +66,9 @@ def serialize_user(user, include_email=True):
         user_data['profile_pic'] = f"https://placehold.co/150x150/E2D9FF/6842FF?text={initials}"
 
     return user_data
-# --- End of Helper ---
 
 # --- Age Validation Helper ---
 def is_over_18(date_string):
-    """Checks if a 'YYYY-MM-DD' date string is at least 18 years ago."""
     if not date_string:
         return True 
     try:
@@ -84,24 +77,20 @@ def is_over_18(date_string):
         return dob <= eighteen_years_ago
     except ValueError:
         return False
-# --- End of Helper ---
 
 # --- Server-side Validation Helper ---
 EMAIL_REGEX = r'^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$'
 ACCOUNT_TYPES = ['personal', 'professional', 'academic'] 
 
 def _validate_password(password, is_create, data):
-    """Helper to validate password rules."""
     if is_create:
         if not password or len(password) < 6:
             return "Password must be at least 6 characters long."
-    # Check for password update
     elif 'password' in data and password and len(password) < 6:
         return "New password must be at least 6 characters long."
     return None
 
 def validate_user_data(data, is_create=True, check_password=True):
-    """Validates user data for creation or updates. Returns a list of error messages."""
     errors = []
     
     name = data.get('name')
@@ -109,28 +98,23 @@ def validate_user_data(data, is_create=True, check_password=True):
     password = data.get('password')
     account_type = data.get('account_type')
 
-    # Validate Name
     if is_create or 'name' in data:
         if not name or len(name) < 2:
             errors.append("Name must be at least 2 characters long.")
     
-    # Validate Email
     if is_create or 'email' in data:
         if not email or not re.match(EMAIL_REGEX, email.lower()):
             errors.append("Please provide a valid email address.")
     
-    # Validate Password (using the helper)
     if check_password:
         password_error = _validate_password(password, is_create, data)
         if password_error:
             errors.append(password_error)
              
-    # Validate Account Type
     if 'account_type' in data and account_type not in ACCOUNT_TYPES:
         errors.append("Invalid account type selected.")
 
     return errors
-
 
 # --- Role-Based Security Helpers ---
 def is_admin(user):
@@ -138,10 +122,8 @@ def is_admin(user):
 
 def is_employee_or_admin(user):
     return user.get('role', 'user').lower() in ['admin', 'employee']
-# --- End Helpers ---
 
-
-# --- Token Required Decorator (Middleware) ---
+# --- Token Required Decorator ---
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -167,7 +149,6 @@ def token_required(f):
 
         return f(current_user, *args, **kwargs)
     return decorated
-# --- END of Decorator ---
 
 @app.route('/me', methods=['GET'])
 @token_required
@@ -279,24 +260,32 @@ def login():
         return jsonify({"message": "Invalid email or password"}), 401
 
 
+# --- FIX: ROBUST PROFILE PIC RETRIEVAL ---
 @app.route('/profile_pic/<string:user_id>', methods=['GET'])
 def get_profile_pic(user_id):
     try:
         user = user_collection.find_one({"_id": ObjectId(user_id)})
+        
+        # If no user or no picture ID, return default placeholder
         if not user or not user.get('profile_pic_id'):
-            initials = user.get('name', 'U')[0].upper()
+            initials = user.get('name', 'U')[0].upper() if user else 'U'
             return redirect(f"https://placehold.co/150x150/E2D9FF/6842FF?text={initials}")
 
-        profile_pic_file = fs.get(ObjectId(user['profile_pic_id']))
+        # Fetch from GridFS
+        grid_out = fs.get(ObjectId(user['profile_pic_id']))
         
+        # Fallback for missing content_type
+        mime_type = grid_out.content_type if grid_out.content_type else 'image/jpeg'
+
         return send_file(
-            io.BytesIO(profile_pic_file.read()),
-            mimetype=profile_pic_file.content_type,
+            io.BytesIO(grid_out.read()),
+            mimetype=mime_type,
             as_attachment=False
         )
     except Exception as e:
-        print(f"Error getting profile pic: {e}")
-        return redirect("https://placehold.co/150x150/E2D9FF/6842FF?text=X")
+        print(f"Error getting profile pic for {user_id}: {e}", flush=True)
+        # Return a RED placeholder to indicate backend error
+        return redirect("https://placehold.co/150x150/FF0000/FFFFFF?text=Err")
 
 
 # --- File Handling Routes ---
@@ -510,9 +499,8 @@ def admin_update_user(current_user, user_id):
     updated_user = user_collection.find_one({"_id": ObjectId(user_id)})
     return jsonify(serialize_user(updated_user, include_email=True)), 200
 
-# --- These helpers are used by admin_update_user ---
+# --- Helpers ---
 def _validate_admin_user_update(data, user_to_update):
-    """Helper to validate admin updates for a user."""
     errors = validate_user_data(data, is_create=False, check_password=True)
     user_id = str(user_to_update['_id'])
     
@@ -532,7 +520,6 @@ def _validate_admin_user_update(data, user_to_update):
     return errors
 
 def _build_admin_user_updates(data):
-    """Helper to build the $set dictionary for user updates."""
     updates = {
         "name": data.get('name'),
         "selected_date": data.get('selected_date'),
@@ -548,7 +535,6 @@ def _build_admin_user_updates(data):
     return updates
 
 def _handle_admin_profile_pic_update(file, user_to_update):
-    """Helper to delete old pic and save new one."""
     if user_to_update.get('profile_pic_id'):
         try:
             fs.delete(ObjectId(user_to_update['profile_pic_id']))
@@ -560,16 +546,8 @@ def _handle_admin_profile_pic_update(file, user_to_update):
     return str(file_id)
 
 
-# --- Admin/Dashboard Routes ---
-
-# --- START: REFACTOR FOR L566 (Cognitive Complexity) ---
-#
-# Reason: The old _build_user_query was 17 complexity.
-# We break it into 5 small functions, each with a complexity of ~2-3.
-# The new _build_user_query just calls them and has a complexity of 0.
-
+# --- Dashboard Filtering ---
 def _add_search_filter(search, query_filters):
-    """Adds search filter to query_filters list."""
     if search:
         query_filters.append({
             "$or": [
@@ -579,41 +557,36 @@ def _add_search_filter(search, query_filters):
         })
 
 def _add_list_filter(list_str, field_name, query_filters):
-    """Adds a list filter (e.g., for roles) to query_filters list."""
     if list_str:
         item_list = list_str.split(',')
         if item_list:
             query_filters.append({field_name: {"$in": item_list}})
 
 def _add_sensitivity_filter(sensitivity_str, query_filters):
-    """Adds sensitivity filter to query_filters list."""
     if sensitivity_str == 'true':
         query_filters.append({"needs_sensitive_storage": True})
     elif sensitivity_str == 'false':
         query_filters.append({"needs_sensitive_storage": False})
 
 def _add_date_filter(start_date_str, end_date_str, query_filters):
-    """Adds date range filter to query_filters list."""
     date_query = {}
     if start_date_str:
         try:
             date_query['$gte'] = dt.strptime(start_date_str, '%Y-%m-%d')
         except ValueError:
-            pass  # Ignore invalid date
+            pass
     if end_date_str:
         try:
             end_dt = dt.strptime(end_date_str, '%Y-%m-%d') + timedelta(days=1, microseconds=-1)
             date_query['$lte'] = end_dt
         except ValueError:
-            pass  # Ignore invalid date
+            pass
     
     if date_query:
         query_filters.append({"created_date": date_query})
 
 def _build_user_query(args):
-    """Helper function to build the MongoDB query from request args."""
     query_filters = []
-    
     _add_search_filter(args.get('search', ''), query_filters)
     _add_list_filter(args.get('roles', ''), "role", query_filters)
     _add_list_filter(args.get('account_types', ''), "account_type", query_filters)
@@ -621,7 +594,6 @@ def _build_user_query(args):
     _add_date_filter(args.get('start_date', ''), args.get('end_date', ''), query_filters)
 
     return {"$and": query_filters} if query_filters else {}
-# --- END: REFACTOR FOR L566 ---
 
 
 @app.route('/users', methods=['GET'])
@@ -636,7 +608,6 @@ def get_users(current_user):
     sort_order_str = request.args.get('sort_order', 'asc')
     sort_order = ASCENDING if sort_order_str == 'asc' else DESCENDING
     
-    # Build query using the helper
     query = _build_user_query(request.args)
         
     total_users = user_collection.count_documents(query)
@@ -671,13 +642,19 @@ def get_user(current_user, user_id):
     except Exception:
         return jsonify({"message": "Invalid User ID"}), 400
 
+# --- FIX: This function now supports FormData ---
 @app.route('/users', methods=['POST'])
 @token_required
 def create_user(current_user):
     if not is_admin(current_user):
         return jsonify({"message": ERROR_MSG_ADMIN_REQUIRED}), 403
         
-    data = request.json
+    # --- FIX: Support both JSON and FormData ---
+    if request.is_json:
+        data = request.json
+    else:
+        data = request.form
+
     email = data.get('email', '').lower()
     selected_date = data.get('selected_date')
     role = data.get('role', 'employee')
@@ -700,6 +677,15 @@ def create_user(current_user):
     password = data.get('password')
     password_hash = generate_password_hash(password)
     
+    # --- FIX: Handle Profile Pic Upload ---
+    profile_pic_id = None
+    if 'profile_pic' in request.files:
+        file = request.files['profile_pic']
+        if file.filename != '':
+            filename = secure_filename(file.filename)
+            file_id = fs.put(file, filename=filename, content_type=file.mimetype)
+            profile_pic_id = str(file_id)
+
     new_user = {
         "name": name,
         "email": email,
@@ -707,7 +693,9 @@ def create_user(current_user):
         "role": role,
         "created_date": dt.now(timezone.utc),
         "selected_date": selected_date,
-        "account_type": "management"
+        "account_type": "management",
+        "profile_pic_id": profile_pic_id,
+        "gallery": []
     }
     result = user_collection.insert_one(new_user)
     new_user['_id'] = result.inserted_id
@@ -715,15 +703,13 @@ def create_user(current_user):
     return jsonify(serialize_user(new_user, include_email=True)), 201
 
 
-# --- Staff Update Validation Helpers (for L565 fix) ---
+# --- Staff Update Validation Helpers ---
 def _validate_staff_name(data, errors):
-    """Validates name for staff update."""
     name = data.get('name')
     if 'name' in data and (not name or len(name) < 2):
         errors.append("Name must be at least 2 characters long.")
 
 def _validate_staff_email(data, user_to_update, errors):
-    """Validates email for staff update."""
     email = data.get('email', '').lower()
     if 'email' in data and (not email or not re.match(EMAIL_REGEX, email.lower())):
         errors.append("Please provide a valid email address.")
@@ -733,25 +719,21 @@ def _validate_staff_email(data, user_to_update, errors):
             errors.append(ERROR_MSG_EMAIL_EXISTS)
 
 def _validate_staff_password(data, errors):
-    """Validates password for staff update."""
     password = data.get('password')
     if 'password' in data and password and len(password) < 6:
             errors.append("New password must be at least 6 characters long.")
 
 def _validate_staff_role(data, errors):
-    """Validates role for staff update."""
     role = data.get('role')
     if role and role not in ['admin', 'employee']:
             errors.append("Role can only be 'admin' or 'employee'.")
 
 def _validate_staff_dob(data, errors):
-    """Validates date of birth for staff update."""
     selected_date = data.get('selected_date')
     if selected_date and not is_over_18(selected_date):
         errors.append(ERROR_MSG_18_PLUS)
 
 def _validate_staff_update(data, user_to_update):
-    """Helper to validate admin updates for a staff member."""
     errors = []
     _validate_staff_name(data, errors)
     _validate_staff_email(data, user_to_update, errors)
@@ -777,7 +759,11 @@ def update_user(current_user, user_id):
     if user_to_update.get('role') not in ['admin', 'employee']:
         return jsonify({"message": "This route is only for updating staff roles"}), 400
             
-    data = request.json
+    # --- FIX: Support both JSON and FormData ---
+    if request.is_json:
+        data = request.json
+    else:
+        data = request.form
     
     errors = _validate_staff_update(data, user_to_update)
     if errors:
@@ -794,6 +780,19 @@ def update_user(current_user, user_id):
     
     if 'password' in data and data['password']:
         updates['password_hash'] = generate_password_hash(data['password'])
+        
+    # --- FIX: Handle Profile Pic Update ---
+    if 'profile_pic' in request.files:
+        file = request.files['profile_pic']
+        if file.filename != '':
+             if user_to_update.get('profile_pic_id'):
+                try:
+                    fs.delete(ObjectId(user_to_update['profile_pic_id']))
+                except:
+                    pass
+             filename = secure_filename(file.filename)
+             file_id = fs.put(file, filename=filename, content_type=file.mimetype)
+             updates['profile_pic_id'] = str(file_id)
 
     if updates:
         user_collection.update_one(
@@ -805,10 +804,9 @@ def update_user(current_user, user_id):
     return jsonify(serialize_user(updated_user, include_email=True)), 200
 
 
-# --- User Deletion Helpers (for Complexity) ---
+# --- User Deletion Helpers ---
 
 def _delete_user_gallery_files(user_to_delete):
-    """Helper to delete all files in a user's gallery."""
     if user_to_delete.get('role') == 'user' and 'gallery' in user_to_delete:
         print(f"User {user_to_delete['_id']} is a 'user'. Deleting their {len(user_to_delete['gallery'])} files...")
         for file_obj in user_to_delete['gallery']:
@@ -819,7 +817,6 @@ def _delete_user_gallery_files(user_to_delete):
                 print(f"  > Error deleting file {file_obj['id']}: {e}")
 
 def _delete_user_profile_pic(user_to_delete):
-    """Helper to delete a user's profile picture."""
     if user_to_delete.get('profile_pic_id'):
         try:
             fs.delete(ObjectId(user_to_delete['profile_pic_id']))
@@ -838,11 +835,9 @@ def delete_user(current_user, user_id):
         if not user_to_delete:
             return jsonify({"message": ERROR_MSG_USER_NOT_FOUND}), 404
 
-        # Call helpers to do the complex work
         _delete_user_gallery_files(user_to_delete)
         _delete_user_profile_pic(user_to_delete)
                 
-        # Now the main function just deletes the user
         user_collection.delete_one({"_id": ObjectId(user_id)})
             
         return jsonify({"message": "User and all associated files deleted"}), 200

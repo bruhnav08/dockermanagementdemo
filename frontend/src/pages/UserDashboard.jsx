@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import api from '../api';
 import { Modal, Pagination, UserForm } from '../components';
 import { useDebounce } from '../hooks';
-import PropTypes from 'prop-types'; // 1. IMPORT PROPTYPES
+import PropTypes from 'prop-types';
 
 // Hook to detect clicks outside an element
 function useClickOutside(ref, handler) {
@@ -26,7 +26,7 @@ const ALL_ROLES = ['admin', 'employee', 'user'];
 const ALL_ACCOUNT_TYPES = ['personal', 'professional', 'academic', 'management'];
 
 
-// --- FilterMenu Component (Extracted to reduce complexity) ---
+// --- FilterMenu Component ---
 function FilterMenu({
   isOpen,
   selectedRoles,
@@ -47,7 +47,6 @@ function FilterMenu({
     <div className="absolute z-10 top-12 right-0 w-80 p-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl space-y-4">
       {/* Roles Section */}
       <div>
-        {/* --- FIX: Added htmlFor --- */}
         <label id="filter-by-role-label" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Role</label>
         <div role="group" aria-labelledby="filter-by-role-label" className="flex flex-col mt-2 space-y-1">
           {ALL_ROLES.map(role => (
@@ -66,7 +65,6 @@ function FilterMenu({
       
       {/* Account Type Section */}
       <div>
-        {/* --- FIX: Added htmlFor --- */}
         <label id="filter-by-account-label" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Account Type</label>
         <div role="group" aria-labelledby="filter-by-account-label" className="flex flex-col mt-2 space-y-1">
           {ALL_ACCOUNT_TYPES.map(type => (
@@ -85,7 +83,6 @@ function FilterMenu({
       
       {/* Sensitive Storage Section */}
       <div>
-        {/* --- FIX: Added htmlFor --- */}
         <label id="filter-by-storage-label" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Storage Needs</label>
         <div role="group" aria-labelledby="filter-by-storage-label" className="flex flex-col mt-2 space-y-1">
           {[
@@ -113,23 +110,23 @@ function FilterMenu({
         <label htmlFor="start-date-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Date Joined</label>
         <div className="mt-2 space-y-2">
           <input
-            id="start-date-filter" // --- FIX: Added id ---
+            id="start-date-filter"
             type="date"
             value={startDate}
             onChange={(e) => onStartDateChange(e.target.value)}
             className="w-full px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             placeholder="From"
-            aria-label="Start date" // Added label for accessibility
+            aria-label="Start date"
           />
           <input
-            id="end-date-filter" // --- FIX: Added id ---
+            id="end-date-filter"
             type="date"
             value={endDate}
             onChange={(e) => onEndDateChange(e.target.value)}
             min={startDate}
             className="w-full px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             placeholder="To"
-            aria-label="End date" // Added label for accessibility
+            aria-label="End date"
           />
         </div>
       </div>
@@ -144,7 +141,6 @@ function FilterMenu({
   );
 }
 
-// --- 2. ADD PROPTYPES BLOCK ---
 FilterMenu.propTypes = {
   isOpen: PropTypes.bool.isRequired,
   selectedRoles: PropTypes.arrayOf(PropTypes.string).isRequired,
@@ -160,7 +156,7 @@ FilterMenu.propTypes = {
   onClearFilters: PropTypes.func.isRequired,
 };
 
-// --- ExpandedRowContent Component (Extracted to reduce complexity) ---
+// --- ExpandedRowContent Component ---
 function ExpandedRowContent({ 
   user, 
   isAdmin, 
@@ -198,7 +194,6 @@ function ExpandedRowContent({
             </div>
             {user.gallery && user.gallery.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {/* --- FIX: Use file.id as key --- */}
                 {user.gallery.map(file => (
                   <div key={file.id} className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded shadow-sm">
                     <span className="text-sm text-indigo-600 dark:text-indigo-300 truncate" title={file.filename}>
@@ -235,7 +230,6 @@ function ExpandedRowContent({
   );
 }
 
-// --- 2. ADD PROPTYPES BLOCK ---
 ExpandedRowContent.propTypes = {
   user: PropTypes.shape({
     id: PropTypes.string.isRequired,
@@ -257,7 +251,6 @@ ExpandedRowContent.defaultProps = {
 };
 
 
-// --- FIX: Extracted helper to remove nested ternary ---
 function getRoleClassName(role) {
   if (role === 'admin') {
     return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
@@ -268,7 +261,7 @@ function getRoleClassName(role) {
   return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
 }
 
-// --- UserRow Component (Extracted to reduce complexity) ---
+// --- UserRow Component ---
 function UserRow({
   user,
   isAdmin,
@@ -303,7 +296,6 @@ function UserRow({
         </td>
         <td className="p-3 text-sm text-gray-700 dark:text-gray-300">{user.email || 'N/A'}</td>
         <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
-          {/* --- FIX: Use helper function --- */}
           <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleClassName(user.role)}`}>
             {user.role}
           </span>
@@ -340,7 +332,6 @@ function UserRow({
         )}
       </tr>
       
-      {/* Now, we just render the new component if expanded */}
       {isExpanded && (
         <ExpandedRowContent 
           user={user}
@@ -355,7 +346,6 @@ function UserRow({
   );
 }
 
-// --- 2. ADD PROPTYPES BLOCK ---
 UserRow.propTypes = {
   user: PropTypes.shape({
     id: PropTypes.string.isRequired,
@@ -382,44 +372,59 @@ UserRow.propTypes = {
 
 /**
  * Handles the logic for saving a staff member (create or update).
+ * --- FIX: UPDATED TO USE FORMDATA FOR IMAGES ---
  */
 async function _executeSaveStaff(
-  formData, token, editingStaff, 
-  setStaffModalMessage, closeStaffModal, 
-  resetFiltersAndFetch, fetchUsers
+  formData, 
+  profilePicFile, // <--- Receive the file
+  token, 
+  editingStaff, 
+  setStaffModalMessage, 
+  closeStaffModal, 
+  resetFiltersAndFetch, 
+  fetchUsers
 ) {
   setStaffModalMessage({ type: '', text: '' });
-  const staffData = { ...formData };
+  
+  // --- FIX: Use FormData to package text + image ---
+  const data = new FormData();
+  
+  for (const key in formData) {
+    if (key === 'password' && editingStaff?.id && !formData[key]) {
+        continue;
+    }
+    data.append(key, formData[key]);
+  }
+
+  // --- FIX: Append the file if it exists ---
+  if (profilePicFile) {
+    data.append('profile_pic', profilePicFile);
+  }
   
   try {
     const isCreating = !editingStaff?.id; 
 
     if (isCreating) {
-      await api.createStaff(staffData, token);
+      await api.createStaff(data, token);
     } else {
-      if (!staffData.password) {
-        delete staffData.password;
-      }
-      await api.updateStaff(editingStaff.id, staffData, token);
+      await api.updateStaff(editingStaff.id, data, token);
     }
     
     closeStaffModal();
 
     if (isCreating) {
-      resetFiltersAndFetch(); // Reset filters on create
+      resetFiltersAndFetch(); 
     } else {
-      fetchUsers(); // Just refresh on update
+      fetchUsers(); 
     }
     
   } catch (err) {
-    // --- FIX: Use 'msg' for the key instead of array index 'i' ---
     setStaffModalMessage({ type: 'error', text: err.message.split('\n').map((msg) => <div key={msg}>{msg}</div>) });
   }
 }
 
 /**
  * Handles the logic for saving a user (create or update).
- * --- FIX: Use a single props object to pass args ---
  */
 async function _executeSaveUser({
   formData, profilePicFile, token, editingUser,
@@ -451,18 +456,17 @@ async function _executeSaveUser({
     closeUserModal();
     
     if (isCreating) {
-      resetFiltersAndFetch(); // Reset filters on create
+      resetFiltersAndFetch(); 
     } else {
-      fetchUsers(); // Just refresh on update
+      fetchUsers(); 
     }
 
   } catch (err) {
-    // --- FIX: Use 'msg' for the key instead of array index 'i' ---
     setUserModalError(err.message.split('\n').map((msg) => <div key={msg}>{msg}</div>));
   }
 }
 
-// 2. Create a new custom hook to hold ALL state and logic
+// Custom hook to hold ALL state and logic
 function useUserDashboardState(token, currentUser) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -622,15 +626,20 @@ function useUserDashboardState(token, currentUser) {
   };
 
   const handleSaveStaff = (formData, profilePicFile) => {
+    // --- FIX: Pass profilePicFile to helper ---
     _executeSaveStaff(
-      formData, token, editingStaff, 
-      setStaffModalMessage, closeStaffModal, 
-      resetFiltersAndFetch, fetchUsers
+      formData, 
+      profilePicFile, // <--- Pass the file
+      token, 
+      editingStaff, 
+      setStaffModalMessage, 
+      closeStaffModal, 
+      resetFiltersAndFetch, 
+      fetchUsers
     );
   };
   
   const handleSaveUser = (formData, profilePicFile) => {
-    // --- FIX: Pass args as an object ---
     _executeSaveUser({
       formData, profilePicFile, token, editingUser,
       setUserModalError, closeUserModal,
@@ -717,7 +726,6 @@ function useUserDashboardState(token, currentUser) {
     }
   };
 
-  // Return all state and handlers for the component to use
   return {
     users, loading, error, 
     isStaffModalOpen, staffModalMessage, editingStaff,
@@ -729,11 +737,9 @@ function useUserDashboardState(token, currentUser) {
     selectedAccountTypes, selectedSensitivity,
     isAdmin, initialUserData, initialStaffData,
     
-    // Setters
     setSearchTerm, setCurrentPage, setStartDate, setEndDate, setIsFilterMenuOpen,
     setUserModalError, setEditingUser, setIsUserModalOpen,
 
-    // Handlers
     handleSort, handleRoleChange, handleAccountTypeChange, handleSensitivityChange,
     handleClearFilters, handleDownload, handleSaveStaff, handleSaveUser,
     handleDeleteUser, handleCreateStaff, closeStaffModal, closeUserModal,
@@ -742,7 +748,6 @@ function useUserDashboardState(token, currentUser) {
   };
 }
 
-// Utility function (can live outside)
 function getFullImageUrl(url) {
   if (!url) {
     return "https://placehold.co/150x150/E2D9FF/6842FF?text=U";
@@ -752,9 +757,6 @@ function getFullImageUrl(url) {
   }
   return `${api.baseUrl}${url}`;
 }
-
-// --- 3. NEW Components to render the JSX ---
-// These are simple "dumb" components that just receive props.
 
 function DashboardHeader({ currentUser, isAdmin, onLogout, onCreateUserClick, onCreateStaffClick }) {
   return (
@@ -793,7 +795,6 @@ function DashboardHeader({ currentUser, isAdmin, onLogout, onCreateUserClick, on
   );
 }
 
-// --- 2. ADD PROPTYPES BLOCK ---
 DashboardHeader.propTypes = {
   currentUser: PropTypes.shape({
     name: PropTypes.string,
@@ -838,7 +839,6 @@ function SearchFilterBar({
   );
 }
 
-// --- 2. ADD PROPTYPES BLOCK ---
 SearchFilterBar.propTypes = {
   searchTerm: PropTypes.string.isRequired,
   onSearchChange: PropTypes.func.isRequired,
@@ -852,7 +852,6 @@ SearchFilterBar.propTypes = {
 };
 
 
-// --- FIX: Extracted helper to remove nested ternary ---
 function renderTableBody(
   loading, error, isAdmin, users, expandedRowId, fileManagementError,
   onRowClick, onEditClick, onDeleteClick, onFileAddClick, onFileDownload, onFileDelete
@@ -921,7 +920,6 @@ function UserTable({
           </tr>
         </thead>
         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-          {/* --- FIX: Use helper function --- */}
           {renderTableBody(
             loading, error, isAdmin, users, expandedRowId, fileManagementError,
             onRowClick, onEditClick, onDeleteClick, onFileAddClick, onFileDownload, onFileDelete
@@ -932,7 +930,6 @@ function UserTable({
   );
 }
 
-// --- 2. ADD PROPTYPES BLOCK ---
 UserTable.propTypes = {
   loading: PropTypes.bool.isRequired,
   error: PropTypes.string,
@@ -1005,7 +1002,6 @@ function DashboardModals({
   );
 }
 
-// --- 2. ADD PROPTYPES BLOCK ---
 DashboardModals.propTypes = {
   isStaffModalOpen: PropTypes.bool.isRequired,
   closeStaffModal: PropTypes.func.isRequired,
@@ -1025,10 +1021,9 @@ DashboardModals.propTypes = {
 };
 
 
-// --- View 4: UserDashboard (This is now simple) ---
+// --- View 4: UserDashboard ---
 export function UserDashboard({ token, onLogout, currentUser }) {
   
-  // Call the custom hook to get all state and logic
   const {
     users, loading, error, 
     isStaffModalOpen, staffModalMessage, editingStaff,
@@ -1040,11 +1035,9 @@ export function UserDashboard({ token, onLogout, currentUser }) {
     selectedAccountTypes, selectedSensitivity,
     isAdmin, initialUserData, initialStaffData,
     
-    // Setters
     setSearchTerm, setCurrentPage, setStartDate, setEndDate, setIsFilterMenuOpen,
     setUserModalError, setEditingUser, setIsUserModalOpen,
 
-    // Handlers
     handleSort, handleRoleChange, handleAccountTypeChange, handleSensitivityChange,
     handleClearFilters, handleDownload, handleSaveStaff, handleSaveUser,
     handleDeleteUser, handleCreateStaff, closeStaffModal, closeUserModal,
@@ -1052,7 +1045,6 @@ export function UserDashboard({ token, onLogout, currentUser }) {
     handleAdminFileDelete, handleEditClick
   } = useUserDashboardState(token, currentUser);
 
-  // --- This is now the *entire* render block ---
   return (
     <div className="w-full max-w-6xl mx-auto p-4">
       <input
@@ -1142,7 +1134,6 @@ export function UserDashboard({ token, onLogout, currentUser }) {
   );
 }
 
-// --- 2. ADD PROPTYPES BLOCK ---
 UserDashboard.propTypes = {
   token: PropTypes.string.isRequired,
   onLogout: PropTypes.func.isRequired,
